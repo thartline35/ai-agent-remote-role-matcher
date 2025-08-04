@@ -2,7 +2,7 @@
   "version": 2,
   "builds": [
     {
-      "src": "index.js",
+      "src": "api/index.js",
       "use": "@vercel/node"
     },
     {
@@ -21,7 +21,7 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/index.js"
+      "dest": "/api/index.js"
     },
     {
       "src": "/frontend.js",
@@ -37,7 +37,7 @@
     }
   ],
   "functions": {
-    "index.js": {
+    "api/index.js": {
       "maxDuration": 300
     }
   },
