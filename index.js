@@ -125,6 +125,11 @@ app.get('/api/health', (req, res) => {
     res.json(healthStatus);
 });
 
+// Serve the main application
+app.get('/', (req, res) => {
+    res.sendFile(path.join(process.cwd(), 'index.html'));
+});
+
 // Enhanced PDF parsing endpoint with better error handling
 app.post('/api/parse-pdf', upload.single('resume'), async (req, res) => {
     try {
