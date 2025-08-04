@@ -9,7 +9,10 @@ import PDFParser from 'pdf2json';
 import path from "path";
 import { analyzeResume, scrapeJobListings } from "./tools.js";
 
-dotenv.config({ path: './local.env' });
+// Load environment variables - use local.env for development, Vercel env vars for production
+if (process.env.NODE_ENV !== 'production') {
+    dotenv.config({ path: './local.env' });
+}
 
 const app = express();
 const port = 3000;
