@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Job Matcher - Find Your Perfect Role</title>
+    <link rel="stylesheet" href="index.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-briefcase"></i>
+                    <h1>AI Job Matcher</h1>
+                </div>
+                <p class="tagline">Upload your resume and find remote roles that perfectly match your skills</p>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Resume Upload Section -->
+            <div class="upload-section">
+                <div class="upload-card">
+                    <div class="upload-icon">
+                        <i class="fas fa-file-upload"></i>
+                    </div>
+                    <h2>Upload Your Resume</h2>
+                    <p>We'll analyze your skills and find matching job opportunities</p>
+                    
+                    <div class="upload-area" id="upload-area">
+                        <input type="file" id="resume-file" accept=".pdf,.doc,.docx,.txt" style="display: none;">
+                        <div class="upload-prompt" id="upload-prompt">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <p>Click to upload or drag and drop</p>
+                            <span>PDF, DOC, DOCX, or TXT (max 5MB)</span>
+                        </div>
+                        <div class="file-info" id="file-info" style="display: none;">
+                            <i class="fas fa-file-alt"></i>
+                            <div class="file-details">
+                                <p id="file-name">filename.pdf</p>
+                                <p id="file-size">2.3 MB</p>
+                            </div>
+                            <button class="remove-file" id="remove-file">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <button class="primary-button" id="analyze-resume" disabled>
+                        <i class="fas fa-search"></i>
+                        Analyze Resume & Find Jobs
+                    </button>
+                </div>
+            </div>
+
+            <!-- Resume Analysis Section -->
+            <div class="analysis-section" id="analysis-section" style="display: none;">
+                <div class="analysis-card">
+                    <h2><i class="fas fa-chart-bar"></i> Resume Analysis</h2>
+                    <div class="skills-grid" id="skills-grid">
+                        <!-- Skills will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Job Search Section -->
+            <div class="search-section" id="search-section" style="display: none;">
+                <div class="search-card">
+                    <h2><i class="fas fa-search"></i> Job Search Filters</h2>
+                    <div class="search-filters">
+                        <div class="filter-group">
+                            <label for="experience-filter">Experience Level:</label>
+                            <select id="experience-filter">
+                                <option value="">Any Level</option>
+                                <option value="entry">Entry Level</option>
+                                <option value="mid">Mid Level</option>
+                                <option value="senior">Senior Level</option>
+                                <option value="lead">Lead/Manager</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="salary-filter">Salary Range:</label>
+                            <select id="salary-filter">
+                                <option value="">Any Salary</option>
+                                <option value="0-50000">$0 - $50k</option>
+                                <option value="50000-75000">$50k - $75k</option>
+                                <option value="75000-100000">$75k - $100k</option>
+                                <option value="100000-150000">$100k - $150k</option>
+                                <option value="150000+">$150k+</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="timezone-filter">Preferred Timezone:</label>
+                            <select id="timezone-filter">
+                                <option value="">Any Timezone</option>
+                                <option value="est">Eastern (EST)</option>
+                                <option value="cst">Central (CST)</option>
+                                <option value="mst">Mountain (MST)</option>
+                                <option value="pst">Pacific (PST)</option>
+                                <option value="gmt">GMT/UTC</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <button class="primary-button" id="start-search">
+                        <i class="fas fa-rocket"></i>
+                        Start Job Search
+                    </button>
+                </div>
+            </div>
+
+            <!-- Loading Section -->
+            <div class="loading-section" id="loading-section" style="display: none;">
+                <div class="loading-card">
+                    <div class="loading-spinner">
+                        <div class="spinner"></div>
+                    </div>
+                    <h3>Processing Your Request</h3>
+                    <p id="loading-message">This may take a few moments to render results...</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div class="results-section" id="results-section" style="display: none;">
+                <div class="results-header">
+                    <h2><i class="fas fa-briefcase"></i> Matching Job Opportunities</h2>
+                    <div class="results-stats">
+                        <span id="total-jobs">0</span> jobs found
+                        <span id="match-percentage">100%</span> skill match
+                    </div>
+                </div>
+                
+                <div class="filters-bar">
+                    <div class="filter-chips" id="filter-chips">
+                        <!-- Active filters will appear here -->
+                    </div>
+                    <button class="clear-filters" id="clear-filters">
+                        <i class="fas fa-times"></i>
+                        Clear All
+                    </button>
+                </div>
+                
+                <div class="jobs-grid" id="jobs-grid">
+                    <!-- Job cards will be populated here -->
+                </div>
+                
+                <div class="load-more" id="load-more" style="display: none;">
+                    <button class="secondary-button">
+                        <i class="fas fa-plus"></i>
+                        Load More Jobs
+                    </button>
+                </div>
+            </div>
+
+            <!-- Error Section -->
+            <div class="error-section" id="error-section" style="display: none;">
+                <div class="error-card">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Oops! Something went wrong</h3>
+                    <p id="error-message">We couldn't process your request right now.</p>
+                    <button class="secondary-button" onclick="location.reload()">
+                        <i class="fas fa-redo"></i>
+                        Try Again
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>&copy; 2025 AI Job Matcher. Powered by OpenAI GPT-4 & Web Scraping</p>
+            <p>Conceptualized, designed, engineered, tested, and deployed by Software/ML Engineer, Tammy Hartline</p>
+        </footer>
+    </div>
+
+    <script src="frontend.js"></script>
+</body>
+</html>
