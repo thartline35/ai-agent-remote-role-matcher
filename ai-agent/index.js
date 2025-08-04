@@ -585,4 +585,4 @@ app.listen(port, () => {
     console.log('='.repeat(50) + '\n');
 });
 
-export default app;
+module.exports = app;
