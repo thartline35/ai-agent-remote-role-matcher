@@ -12,9 +12,6 @@ import { analyzeResume, scrapeJobListings } from "./tools.js";
 // Load environment variables - use local.env for development, Vercel env vars for production
 if (process.env.NODE_ENV !== 'production') {
     dotenv.config({ path: './local.env' });
-} else {
-    // Ensure dotenv is loaded for production (Vercel)
-    dotenv.config();
 }
 
 const app = express();
@@ -26,7 +23,18 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static('.'));
+// Serve static files for Vercel
+app.use(express.static('.', {
+    setHeaders: (res, path) => {
+        if (path.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript');
+        } else if (path.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css');
+        } else if (path.endsWith('.html')) {
+            res.setHeader('Content-Type', 'text/html');
+        }
+    }
+}));
 
 // Configure multer for file uploads with enhanced security
 const upload = multer({
@@ -90,6 +98,15 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
     timeout: 30000, // 30 second timeout for OpenAI requests
     maxRetries: 2   // Retry failed requests up to 2 times
+});
+
+// Test endpoint for Vercel
+app.get('/api/test', (req, res) => {
+    res.json({ 
+        message: 'Vercel deployment is working!',
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development'
+    });
 });
 
 // Health check endpoint
@@ -602,6 +619,3 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Export for Vercel
 export default app;
-
-// Vercel serverless function handler
-export const handler = app;
