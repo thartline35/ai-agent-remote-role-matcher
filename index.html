@@ -370,14 +370,109 @@
             transform: none;
         }
 
-        /* Hide sections initially */
-        .analysis-section,
-        .search-section,
-        .loading-section,
-        .results-section,
-        .error-section {
-            display: none;
-        }
+                 /* Hide sections initially */
+         .analysis-section,
+         .search-section,
+         .loading-section,
+         .results-section,
+         .error-section {
+             display: none;
+         }
+
+
+
+         /* Results Section Styles */
+         .results-header {
+             background: white;
+             border-radius: 20px;
+             padding: 2rem;
+             margin-bottom: 2rem;
+             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+         }
+
+         .results-stats {
+             display: flex;
+             gap: 2rem;
+             margin: 1rem 0;
+             font-weight: 600;
+         }
+
+         .filter-chips {
+             display: flex;
+             flex-wrap: wrap;
+             gap: 0.5rem;
+             margin: 1rem 0;
+         }
+
+         .filter-chip {
+             background: #667eea;
+             color: white;
+             padding: 0.5rem 1rem;
+             border-radius: 20px;
+             font-size: 0.9rem;
+             display: flex;
+             align-items: center;
+             gap: 0.5rem;
+         }
+
+         .clear-filters {
+             background: #dc3545;
+             color: white;
+             border: none;
+             padding: 0.5rem 1rem;
+             border-radius: 10px;
+             cursor: pointer;
+             font-size: 0.9rem;
+         }
+
+         .jobs-grid {
+             display: grid;
+             gap: 1.5rem;
+             margin-bottom: 2rem;
+         }
+
+         .load-more {
+             background: linear-gradient(45deg, #667eea, #764ba2);
+             color: white;
+             border: none;
+             padding: 1rem 2rem;
+             border-radius: 10px;
+             cursor: pointer;
+             font-size: 1rem;
+             font-weight: 600;
+             display: block;
+             margin: 0 auto;
+         }
+
+         /* Error Section Styles */
+         .error-content {
+             background: white;
+             border-radius: 20px;
+             padding: 2rem;
+             text-align: center;
+             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+             border-left: 4px solid #dc3545;
+         }
+
+         .error-content i {
+             font-size: 3rem;
+             color: #dc3545;
+             margin-bottom: 1rem;
+         }
+
+         .retry-btn {
+             background: #667eea;
+             color: white;
+             border: none;
+             padding: 0.75rem 1.5rem;
+             border-radius: 10px;
+             cursor: pointer;
+             font-size: 1rem;
+             margin-top: 1rem;
+             display: inline-flex;
+             align-items: center;
+             gap: 0.5rem;
+         }
 
         /* Responsive Design */
         @media (max-width: 768px) {
