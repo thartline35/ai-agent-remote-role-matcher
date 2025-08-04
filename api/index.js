@@ -77,7 +77,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // PDF parsing endpoint
-app.post('/api/parse-pdf', upload.single('file'), async (req, res) => {
+app.post('/api/parse-pdf', upload.single('resume'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No file uploaded' });
