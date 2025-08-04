@@ -24,14 +24,13 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 // Serve static files for Vercel
-app.use(express.static(process.cwd(), {
-    setHeaders: (res, filePath) => {
-        console.log(`Serving static file: ${filePath}`);
-        if (filePath.endsWith('.js')) {
+app.use(express.static('.', {
+    setHeaders: (res, path) => {
+        if (path.endsWith('.js')) {
             res.setHeader('Content-Type', 'application/javascript');
-        } else if (filePath.endsWith('.css')) {
+        } else if (path.endsWith('.css')) {
             res.setHeader('Content-Type', 'text/css');
-        } else if (filePath.endsWith('.html')) {
+        } else if (path.endsWith('.html')) {
             res.setHeader('Content-Type', 'text/html');
         }
     }
@@ -101,48 +100,6 @@ const openai = new OpenAI({
     maxRetries: 2   // Retry failed requests up to 2 times
 });
 
-// Test endpoint for Vercel
-app.get('/api/test', (req, res) => {
-    res.json({ 
-        message: 'Vercel deployment is working!',
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development'
-    });
-});
-
-// Debug endpoint to check static files
-app.get('/api/debug', (req, res) => {
-    const fs = require('fs');
-    const path = require('path');
-    
-    const files = ['index.html', 'frontend.js', 'index.css', 'tools.js'];
-    const fileStatus = {};
-    
-    files.forEach(file => {
-        const filePath = path.join(process.cwd(), file);
-        try {
-            const stats = fs.statSync(filePath);
-            fileStatus[file] = {
-                exists: true,
-                size: stats.size,
-                path: filePath
-            };
-        } catch (error) {
-            fileStatus[file] = {
-                exists: false,
-                error: error.message
-            };
-        }
-    });
-    
-    res.json({
-        message: 'Debug information',
-        cwd: process.cwd(),
-        files: fileStatus,
-        timestamp: new Date().toISOString()
-    });
-});
-
 // Health check endpoint
 app.get('/api/health', (req, res) => {
     const healthStatus = {
@@ -157,11 +114,6 @@ app.get('/api/health', (req, res) => {
         }
     };
     res.json(healthStatus);
-});
-
-// Serve the main application
-app.get('/', (req, res) => {
-    res.sendFile(path.join(process.cwd(), 'index.html'));
 });
 
 // Enhanced PDF parsing endpoint with better error handling
@@ -555,12 +507,10 @@ app.post('/api/search-jobs', async (req, res) => {
     }
 });
 
-// Root route (remove duplicate)
+// Root route
 app.get('/', (req, res) => {
-    res.sendFile(path.join(process.cwd(), 'index.html'));
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
-
-// Static file serving is handled by express.static middleware above
 
 // Error handling middleware
 app.use((error, req, res, next) => {
@@ -582,9 +532,9 @@ app.use((error, req, res, next) => {
     }
 });
 
-// 404 handler for API routes only
-app.use('/api/*', (req, res) => {
-    res.status(404).json({ error: 'API endpoint not found' });
+// 404 handler
+app.use((req, res) => {
+    res.status(404).json({ error: 'Endpoint not found' });
 });
 
 // Graceful shutdown handling
