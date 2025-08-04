@@ -1,34 +1,20 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "index.html",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "frontend.js",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "index.css",
-      "use": "@vercel/static"
+    "version": 2,
+    "builds": [
+      {
+        "src": "index.js",
+        "use": "@vercel/node"
+      }
+    ],
+    "routes": [
+      {
+        "src": "/(.*)",
+        "dest": "/index.js"
+      }
+    ],
+    "functions": {
+      "index.js": {
+        "maxDuration": 60
+      }
     }
-  ],
-  "routes": [
-    {
-      "src": "/frontend.js",
-      "dest": "/frontend.js"
-    },
-    {
-      "src": "/index.css",
-      "dest": "/index.css"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
-  ],
-  "env": {
-    "NODE_ENV": "production"
   }
-}
