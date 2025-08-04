@@ -24,13 +24,13 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 // Serve static files for Vercel
-app.use(express.static('.', {
-    setHeaders: (res, path) => {
-        if (path.endsWith('.js')) {
+app.use(express.static(process.cwd(), {
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.js')) {
             res.setHeader('Content-Type', 'application/javascript');
-        } else if (path.endsWith('.css')) {
+        } else if (filePath.endsWith('.css')) {
             res.setHeader('Content-Type', 'text/css');
-        } else if (path.endsWith('.html')) {
+        } else if (filePath.endsWith('.html')) {
             res.setHeader('Content-Type', 'text/html');
         }
     }
@@ -521,9 +521,25 @@ app.post('/api/search-jobs', async (req, res) => {
     }
 });
 
-// Route route
+// Root route (remove duplicate)
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    res.sendFile(path.join(process.cwd(), 'index.html'));
+});
+
+// Explicit static file routes for Vercel
+app.get('/frontend.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.sendFile(path.join(process.cwd(), 'frontend.js'));
+});
+
+app.get('/index.css', (req, res) => {
+    res.setHeader('Content-Type', 'text/css');
+    res.sendFile(path.join(process.cwd(), 'index.css'));
+});
+
+app.get('/tools.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.sendFile(path.join(process.cwd(), 'tools.js'));
 });
 
 // Error handling middleware
@@ -546,9 +562,9 @@ app.use((error, req, res, next) => {
     }
 });
 
-// 404 handler
-app.use((req, res) => {
-    res.status(404).json({ error: 'Endpoint not found' });
+// 404 handler for API routes only
+app.use('/api/*', (req, res) => {
+    res.status(404).json({ error: 'API endpoint not found' });
 });
 
 // Graceful shutdown handling
