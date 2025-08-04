@@ -131,12 +131,7 @@ app.post('/api/parse-pdf', upload.single('resume'), async (req, res) => {
         const result = await parsePDF();
         console.log(`PDF parsed successfully: ${result.pages} pages, ${result.characters} characters extracted`);
         
-        res.json({
-            success: true,
-            text: result.text,
-            pages: result.pages,
-            characters: result.characters
-        });
+        res.json({ text: result.text });
 
     } catch (error) {
         console.error('PDF parsing error:', error);

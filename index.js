@@ -26,6 +26,7 @@ app.use(express.json({ limit: '10mb' }));
 // Serve static files for Vercel
 app.use(express.static(process.cwd(), {
     setHeaders: (res, filePath) => {
+        console.log(`Serving static file: ${filePath}`);
         if (filePath.endsWith('.js')) {
             res.setHeader('Content-Type', 'application/javascript');
         } else if (filePath.endsWith('.css')) {
@@ -106,6 +107,39 @@ app.get('/api/test', (req, res) => {
         message: 'Vercel deployment is working!',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV || 'development'
+    });
+});
+
+// Debug endpoint to check static files
+app.get('/api/debug', (req, res) => {
+    const fs = require('fs');
+    const path = require('path');
+    
+    const files = ['index.html', 'frontend.js', 'index.css', 'tools.js'];
+    const fileStatus = {};
+    
+    files.forEach(file => {
+        const filePath = path.join(process.cwd(), file);
+        try {
+            const stats = fs.statSync(filePath);
+            fileStatus[file] = {
+                exists: true,
+                size: stats.size,
+                path: filePath
+            };
+        } catch (error) {
+            fileStatus[file] = {
+                exists: false,
+                error: error.message
+            };
+        }
+    });
+    
+    res.json({
+        message: 'Debug information',
+        cwd: process.cwd(),
+        files: fileStatus,
+        timestamp: new Date().toISOString()
     });
 });
 
@@ -526,21 +560,7 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(process.cwd(), 'index.html'));
 });
 
-// Explicit static file routes for Vercel
-app.get('/frontend.js', (req, res) => {
-    res.setHeader('Content-Type', 'application/javascript');
-    res.sendFile(path.join(process.cwd(), 'frontend.js'));
-});
-
-app.get('/index.css', (req, res) => {
-    res.setHeader('Content-Type', 'text/css');
-    res.sendFile(path.join(process.cwd(), 'index.css'));
-});
-
-app.get('/tools.js', (req, res) => {
-    res.setHeader('Content-Type', 'application/javascript');
-    res.sendFile(path.join(process.cwd(), 'tools.js'));
-});
+// Static file serving is handled by express.static middleware above
 
 // Error handling middleware
 app.use((error, req, res, next) => {
