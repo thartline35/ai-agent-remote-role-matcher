@@ -584,3 +584,5 @@ app.listen(port, () => {
     console.log('Ready to process job matching requests! 🎉');
     console.log('='.repeat(50) + '\n');
 });
+
+export default app;
