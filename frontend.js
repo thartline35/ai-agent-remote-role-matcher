@@ -1,0 +1,1062 @@
+// Enhanced Frontend.js for AI Job Matcher with improved resume analysis
+class AIJobMatcher {
+    constructor() {
+        this.initializeElements();
+        this.bindEvents();
+        this.currentFile = null;
+        this.resumeAnalysis = {
+            technicalSkills: [],
+            softSkills: [],
+            workExperience: [],
+            education: [],
+            qualifications: [],
+            industries: [],
+            responsibilities: [],
+            achievements: [],
+            seniorityLevel: 'mid'
+        };
+        this.jobResults = [];
+        this.remainingJobs = [];
+        this.totalJobs = 0;
+        this.displayedJobsCount = 0;
+        this.currentFilteredJobs = [];
+    }
+
+    initializeElements() {
+        // Upload elements
+        this.uploadArea = document.getElementById('upload-area');
+        this.resumeFile = document.getElementById('resume-file');
+        this.uploadPrompt = document.getElementById('upload-prompt');
+        this.fileInfo = document.getElementById('file-info');
+        this.fileName = document.getElementById('file-name');
+        this.fileSize = document.getElementById('file-size');
+        this.removeFile = document.getElementById('remove-file');
+        this.analyzeResumeBtn = document.getElementById('analyze-resume');
+
+        // Analysis elements
+        this.analysisSection = document.getElementById('analysis-section');
+        this.skillsGrid = document.getElementById('skills-grid');
+
+        // Search elements
+        this.searchSection = document.getElementById('search-section');
+        this.experienceFilter = document.getElementById('experience-filter');
+        this.salaryFilter = document.getElementById('salary-filter');
+        this.timezoneFilter = document.getElementById('timezone-filter');
+        this.startSearchBtn = document.getElementById('start-search');
+
+        // Loading elements
+        this.loadingSection = document.getElementById('loading-section');
+        this.loadingMessage = document.getElementById('loading-message');
+        this.progressFill = document.getElementById('progress-fill');
+
+        // Results elements
+        this.resultsSection = document.getElementById('results-section');
+        this.totalJobsElement = document.getElementById('total-jobs');
+        this.matchPercentage = document.getElementById('match-percentage');
+        this.filterChips = document.getElementById('filter-chips');
+        this.clearFilters = document.getElementById('clear-filters');
+        this.jobsGrid = document.getElementById('jobs-grid');
+        this.loadMore = document.getElementById('load-more');
+
+        // Error elements
+        this.errorSection = document.getElementById('error-section');
+        this.errorMessage = document.getElementById('error-message');
+    }
+
+    bindEvents() {
+        // File upload events
+        if (this.uploadArea) this.uploadArea.addEventListener('click', () => this.resumeFile.click());
+        if (this.uploadArea) this.uploadArea.addEventListener('dragover', (e) => this.handleDragOver(e));
+        if (this.uploadArea) this.uploadArea.addEventListener('dragleave', (e) => this.handleDragLeave(e));
+        if (this.uploadArea) this.uploadArea.addEventListener('drop', (e) => this.handleDrop(e));
+        if (this.resumeFile) this.resumeFile.addEventListener('change', (e) => this.handleFileSelect(e));
+        if (this.removeFile) this.removeFile.addEventListener('click', () => this.removeCurrentFile());
+
+        // Analysis and search events
+        if (this.analyzeResumeBtn) this.analyzeResumeBtn.addEventListener('click', () => this.analyzeResume());
+        if (this.startSearchBtn) this.startSearchBtn.addEventListener('click', () => this.startJobSearch());
+        if (this.clearFilters) this.clearFilters.addEventListener('click', () => this.clearAllFilters());
+
+        // Filter change events
+        if (this.experienceFilter) this.experienceFilter.addEventListener('change', () => this.applyFilters());
+        if (this.salaryFilter) this.salaryFilter.addEventListener('change', () => this.applyFilters());
+        if (this.timezoneFilter) this.timezoneFilter.addEventListener('change', () => this.applyFilters());
+
+        // Load more functionality
+        if (this.loadMore) this.loadMore.addEventListener('click', () => this.loadMoreJobs());
+    }
+
+    handleDragOver(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.uploadArea.style.borderColor = '#764ba2';
+        this.uploadArea.style.background = 'rgba(102, 126, 234, 0.1)';
+    }
+
+    handleDrop(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.uploadArea.style.borderColor = '#667eea';
+        this.uploadArea.style.background = 'rgba(102, 126, 234, 0.05)';
+
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+            this.processFile(files[0]);
+        }
+    }
+
+    handleDragLeave(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.uploadArea.style.borderColor = '#667eea';
+        this.uploadArea.style.background = 'rgba(102, 126, 234, 0.05)';
+    }
+
+    handleFileSelect(e) {
+        const file = e.target.files[0];
+        if (file) {
+            this.processFile(file);
+        }
+    }
+
+    processFile(file) {
+        // Validate file type
+        const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
+        if (!allowedTypes.includes(file.type)) {
+            this.showError('Please upload a PDF, DOC, DOCX, or TXT file.');
+            return;
+        }
+
+        // Validate file size (5MB limit)
+        if (file.size > 5 * 1024 * 1024) {
+            this.showError('File size must be less than 5MB.');
+            return;
+        }
+
+        this.currentFile = file;
+        this.displayFileInfo(file);
+        this.analyzeResumeBtn.disabled = false;
+    }
+
+    displayFileInfo(file) {
+        this.fileName.textContent = file.name;
+        this.fileSize.textContent = this.formatFileSize(file.size);
+        this.uploadPrompt.style.display = 'none';
+        this.fileInfo.style.display = 'flex';
+    }
+
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    removeCurrentFile() {
+        this.currentFile = null;
+        this.resumeFile.value = '';
+        this.uploadPrompt.style.display = 'block';
+        this.fileInfo.style.display = 'none';
+        this.analyzeResumeBtn.disabled = true;
+        this.hideAnalysisSection();
+    }
+
+    async analyzeResume() {
+        if (!this.currentFile) return;
+
+        try {
+            this.showLoading(true, 'Analyzing your resume comprehensively...');
+            this.hideError();
+
+            let resumeText;
+
+            // Handle different file types
+            if (this.currentFile.type === 'application/pdf') {
+                // For PDF files, send to backend for parsing first
+                const formData = new FormData();
+                formData.append('resume', this.currentFile);
+                
+                const parseResponse = await fetch('/api/parse-pdf', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!parseResponse.ok) {
+                    throw new Error('Failed to parse PDF');
+                }
+                
+                const parseResult = await parseResponse.json();
+                resumeText = parseResult.text;
+            } else {
+                // For other file types, read directly
+                resumeText = await this.readFileContent(this.currentFile);
+            }
+
+            // Send to backend for enhanced analysis
+            const response = await fetch('/api/analyze-resume', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ resumeText })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to analyze resume');
+            }
+
+            const data = await response.json();
+
+            // Handle enhanced analysis structure
+            this.resumeAnalysis = {
+                technicalSkills: data.technicalSkills || [],
+                softSkills: data.softSkills || [],
+                workExperience: data.workExperience || [],
+                education: data.education || [],
+                qualifications: data.qualifications || [],
+                industries: data.industries || [],
+                responsibilities: data.responsibilities || [],
+                achievements: data.achievements || [],
+                seniorityLevel: data.seniorityLevel || 'mid'
+            };
+
+            console.log('Enhanced resume analysis completed:', this.resumeAnalysis);
+
+            this.displayEnhancedSkillsAnalysis();
+            this.showSearchSection();
+            this.showLoading(false);
+
+        } catch (error) {
+            console.error('Error analyzing resume:', error);
+            this.showError('Failed to analyze resume. Please try again.');
+            this.showLoading(false);
+        }
+    }
+
+    async readFileContent(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = (e) => reject(e);
+
+            if (file.type === 'text/plain') {
+                reader.readAsText(file);
+            } else if (file.type === 'application/pdf') {
+                // For PDF files, we need to send to backend for parsing
+                reader.readAsArrayBuffer(file);
+            } else {
+                // For DOC/DOCX files, try reading as text
+                reader.readAsText(file);
+            }
+        });
+    }
+
+    displayEnhancedSkillsAnalysis() {
+        this.skillsGrid.innerHTML = '';
+
+        // Create summary card first
+        this.createSummaryCard();
+
+        // Display Technical Skills
+        if (this.resumeAnalysis.technicalSkills && this.resumeAnalysis.technicalSkills.length > 0) {
+            this.createSkillSection('Technical Skills', this.resumeAnalysis.technicalSkills, 'fas fa-code', 'technical');
+        }
+
+        // Display Soft Skills
+        if (this.resumeAnalysis.softSkills && this.resumeAnalysis.softSkills.length > 0) {
+            this.createSkillSection('Soft Skills', this.resumeAnalysis.softSkills, 'fas fa-users', 'soft');
+        }
+
+        // Display Work Experience
+        if (this.resumeAnalysis.workExperience && this.resumeAnalysis.workExperience.length > 0) {
+            this.createSkillSection('Work Experience', this.resumeAnalysis.workExperience, 'fas fa-briefcase', 'experience');
+        }
+
+        // Display Industries
+        if (this.resumeAnalysis.industries && this.resumeAnalysis.industries.length > 0) {
+            this.createSkillSection('Industries', this.resumeAnalysis.industries, 'fas fa-industry', 'industry');
+        }
+
+        // Display Responsibilities
+        if (this.resumeAnalysis.responsibilities && this.resumeAnalysis.responsibilities.length > 0) {
+            this.createSkillSection('Key Responsibilities', this.resumeAnalysis.responsibilities, 'fas fa-tasks', 'responsibility');
+        }
+
+        // Display Education
+        if (this.resumeAnalysis.education && this.resumeAnalysis.education.length > 0) {
+            this.createSkillSection('Education & Certifications', this.resumeAnalysis.education, 'fas fa-graduation-cap', 'education');
+        }
+
+        // Display Achievements
+        if (this.resumeAnalysis.achievements && this.resumeAnalysis.achievements.length > 0) {
+            this.createSkillSection('Key Achievements', this.resumeAnalysis.achievements, 'fas fa-trophy', 'achievement');
+        }
+
+        // Display Qualifications
+        if (this.resumeAnalysis.qualifications && this.resumeAnalysis.qualifications.length > 0) {
+            this.createSkillSection('Qualifications', this.resumeAnalysis.qualifications, 'fas fa-certificate', 'qualification');
+        }
+
+        this.analysisSection.style.display = 'block';
+        this.analysisSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    createSummaryCard() {
+        const summarySection = document.createElement('div');
+        summarySection.className = 'skills-section summary-card';
+        
+        const seniorityDisplay = this.resumeAnalysis.seniorityLevel.charAt(0).toUpperCase() + this.resumeAnalysis.seniorityLevel.slice(1);
+        
+        summarySection.innerHTML = `
+            <h3><i class="fas fa-user-tie"></i> Profile Summary</h3>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <span class="summary-label">Seniority Level:</span>
+                    <span class="summary-value">${seniorityDisplay}</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Technical Skills:</span>
+                    <span class="summary-value">${this.resumeAnalysis.technicalSkills.length}</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Industries:</span>
+                    <span class="summary-value">${this.resumeAnalysis.industries.length}</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Key Roles:</span>
+                    <span class="summary-value">${this.resumeAnalysis.workExperience.length}</span>
+                </div>
+            </div>
+        `;
+        
+        this.skillsGrid.appendChild(summarySection);
+    }
+
+    createSkillSection(title, skills, iconClass, chipClass) {
+        const section = document.createElement('div');
+        section.className = 'skills-section';
+        section.innerHTML = `<h3><i class="${iconClass}"></i> ${title}</h3>`;
+
+        skills.forEach(skill => {
+            const skillChip = document.createElement('div');
+            skillChip.className = `skill-chip ${chipClass}`;
+            
+            // Handle both string and object cases
+            let displayText;
+            if (typeof skill === 'string') {
+                displayText = skill;
+            } else if (skill && typeof skill === 'object') {
+                // For work experience objects, extract job title or use a meaningful field
+                if (skill.jobTitle) {
+                    displayText = skill.jobTitle;
+                } else if (skill.title) {
+                    displayText = skill.title;
+                } else if (skill.role) {
+                    displayText = skill.role;
+                } else {
+                    displayText = JSON.stringify(skill);
+                }
+            } else {
+                displayText = String(skill);
+            }
+            
+            skillChip.textContent = displayText;
+            section.appendChild(skillChip);
+        });
+
+        this.skillsGrid.appendChild(section);
+    }
+
+    hideAnalysisSection() {
+        this.analysisSection.style.display = 'none';
+        this.searchSection.style.display = 'none';
+    }
+
+    showSearchSection() {
+        this.searchSection.style.display = 'block';
+        this.searchSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    async startJobSearch() {
+        try {
+            this.showLoading(true, 'Searching for remote jobs matching your profile...');
+            this.hideError();
+
+            this.jobResults = [];
+            this.remainingJobs = [];
+            this.totalJobs = 0;
+            this.displayedJobsCount = 0;
+
+            const filters = this.getSearchFilters();
+
+            // Set timeout for job search (3 minutes to match server timeout)
+            const timeoutId = setTimeout(() => {
+                if (this.loadingSection.style.display === 'block') {
+                    this.showError('Job search is taking longer than expected. Please try again.');
+                    this.showLoading(false);
+                }
+            }, 180000); // 3 minutes timeout (matches server timeout)
+
+            const clearTimeoutOnComplete = () => {
+                clearTimeout(timeoutId);
+            };
+
+            console.log('Starting enhanced job search...');
+            console.log('Enhanced analysis data:', this.resumeAnalysis);
+            console.log('Search filters:', filters);
+            
+            // Use fetch with streaming for real-time updates
+            const response = await fetch('/api/search-jobs', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    analysis: this.resumeAnalysis,
+                    filters
+                })
+            });
+            
+            console.log('Job search response received:', response.status, response.statusText);
+
+            if (!response.ok) {
+                clearTimeoutOnComplete();
+                const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }));
+                throw new Error(errorData.error || `Server error (${response.status})`);
+            }
+
+            // Set up streaming response handling
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            console.log('Reading streaming job search results...');
+
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        console.log('Job search stream completed');
+                        break;
+                    }
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const jsonStr = line.slice(6).trim();
+                                if (!jsonStr) continue; // Skip empty lines
+                                
+                                const data = JSON.parse(jsonStr);
+                                console.log('Received job search data:', data.type, data);
+
+                                switch (data.type) {
+                                    case 'jobs_found':
+                                        console.log(`Received ${data.jobs.length} jobs from ${data.source}`);
+                                        this.jobResults.push(...data.jobs);
+
+                                        this.loadingMessage.textContent = `Found ${data.totalFound} remote jobs from ${data.source}...`;
+                                        this.updateProgressBar(30 + (this.jobResults.length / 50) * 40);
+
+                                        // Show jobs immediately as they come in
+                                        this.displayJobResults();
+                                        break;
+
+                                    case 'search_complete':
+                                        console.log('Job search completed:', data);
+                                        
+                                        // Handle pagination format
+                                        if (data.initialJobs && data.remainingJobs !== undefined) {
+                                            this.jobResults = data.initialJobs;
+                                            this.remainingJobs = data.remainingJobs;
+                                            this.totalJobs = data.totalJobs;
+                                        } else {
+                                            this.jobResults = data.jobs || this.jobResults;
+                                            this.remainingJobs = [];
+                                            this.totalJobs = this.jobResults.length;
+                                        }
+                                        
+                                        this.displayJobResults();
+                                        this.showLoading(false);
+                                        clearTimeoutOnComplete();
+                                        return;
+
+                                    case 'error':
+                                        this.showError(data.error);
+                                        this.showLoading(false);
+                                        clearTimeoutOnComplete();
+                                        return;
+                                }
+                            } catch (parseError) {
+                                console.error('Error parsing job search SSE data:', parseError);
+                                console.error('Problematic line:', line);
+                                console.error('JSON string:', jsonStr);
+                                // Continue processing other lines instead of breaking
+                            }
+                        }
+                    }
+                }
+            } catch (streamError) {
+                console.error('Stream reading error:', streamError);
+                throw new Error('Failed to read job search results stream');
+            } finally {
+                reader.releaseLock();
+            }
+
+        } catch (error) {
+            console.error('Job search error:', error);
+
+            if (typeof clearTimeoutOnComplete === 'function') {
+                clearTimeoutOnComplete();
+            }
+
+            let userMessage = 'Failed to search for jobs. Please try again.';
+
+            if (error.name === 'AbortError') {
+                userMessage = 'Request timed out. Please try again with different search criteria.';
+            } else if (error.message.includes('No jobs found') || error.message.includes('No remote jobs found')) {
+                userMessage = error.message + ' Try updating your resume or broadening your search criteria.';
+            } else if (error.message.includes('API')) {
+                userMessage = 'API service issue. Please try again in a few minutes.';
+            } else if (error.message.includes('network') || error.message.includes('fetch')) {
+                userMessage = 'Network connection issue. Please check your internet connection.';
+            }
+
+            this.showError(userMessage);
+            this.showLoading(false);
+            this.addRetryButton();
+        }
+    }
+
+    updateProgressBar(percentage) {
+        this.progressFill.style.width = `${Math.min(percentage, 100)}%`;
+    }
+
+    getSearchFilters() {
+        return {
+            experience: this.experienceFilter.value,
+            salary: this.salaryFilter.value,
+            timezone: this.timezoneFilter.value
+        };
+    }
+
+    displayJobResults() {
+        console.log(`Displaying ${this.jobResults.length} remote jobs`);
+        this.totalJobsElement.textContent = this.jobResults.length;
+
+        // Calculate average match percentage
+        const avgMatch = this.jobResults.length > 0
+            ? Math.round(this.jobResults.reduce((sum, job) => sum + (job.matchPercentage || 0), 0) / this.jobResults.length)
+            : 0;
+        this.matchPercentage.textContent = `${avgMatch}%`;
+
+        this.jobsGrid.innerHTML = '';
+
+        // Show all jobs as they come in
+        this.jobResults.forEach(job => {
+            const jobCard = this.createEnhancedJobCard(job);
+            this.jobsGrid.appendChild(jobCard);
+        });
+
+        this.displayedJobsCount = this.jobResults.length;
+        this.currentFilteredJobs = [];
+
+        this.resultsSection.style.display = 'block';
+        this.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        // Show load more if we have remaining jobs
+        if (this.remainingJobs && this.remainingJobs.length > 0) {
+            this.loadMore.style.display = 'block';
+        } else {
+            this.loadMore.style.display = 'none';
+        }
+    }
+
+    createEnhancedJobCard(job) {
+        const card = document.createElement('div');
+        card.className = 'job-card';
+
+        // Enhanced match breakdown with new fields
+        let matchBreakdown = '';
+        if (job.industryMatch !== undefined || job.seniorityMatch !== undefined || job.growthPotential) {
+            matchBreakdown = `
+                <div class="match-breakdown">
+                    <div class="match-item">
+                        <span class="match-label">Overall Match:</span>
+                        <span class="match-value">${job.matchPercentage || 0}%</span>
+                    </div>
+                    ${job.industryMatch !== undefined ? `
+                    <div class="match-item">
+                        <span class="match-label">Industry Fit:</span>
+                        <span class="match-value">${job.industryMatch}%</span>
+                    </div>` : ''}
+                    ${job.seniorityMatch !== undefined ? `
+                    <div class="match-item">
+                        <span class="match-label">Level Match:</span>
+                        <span class="match-value">${job.seniorityMatch}%</span>
+                    </div>` : ''}
+                    ${job.growthPotential ? `
+                    <div class="match-item">
+                        <span class="match-label">Growth:</span>
+                        <span class="match-value growth-${job.growthPotential}">${job.growthPotential}</span>
+                    </div>` : ''}
+                </div>
+            `;
+        } else {
+            matchBreakdown = `
+                <div class="match-breakdown">
+                    <div class="match-item">
+                        <span class="match-label">Match Score:</span>
+                        <span class="match-value">${job.matchPercentage || 'Processing...'}%</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Enhanced skills display with categorization
+        let skillsDisplay = '';
+        
+        if (job.matchedTechnicalSkills && job.matchedTechnicalSkills.length > 0) {
+            skillsDisplay += `
+                <div class="job-skills-category">
+                    <h4><i class="fas fa-code"></i> Matched Technical Skills</h4>
+                    <div class="job-skills-list">
+                        ${job.matchedTechnicalSkills.map(skill => `<span class="job-skill technical matched">${skill}</span>`).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        if (job.matchedSoftSkills && job.matchedSoftSkills.length > 0) {
+            skillsDisplay += `
+                <div class="job-skills-category">
+                    <h4><i class="fas fa-users"></i> Matched Soft Skills</h4>
+                    <div class="job-skills-list">
+                        ${job.matchedSoftSkills.map(skill => `<span class="job-skill soft matched">${skill}</span>`).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        if (job.matchedExperience && job.matchedExperience.length > 0) {
+            skillsDisplay += `
+                <div class="job-skills-category">
+                    <h4><i class="fas fa-briefcase"></i> Matched Experience</h4>
+                    <div class="job-skills-list">
+                        ${job.matchedExperience.map(exp => `<span class="job-skill experience matched">${exp}</span>`).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        if (job.missingRequirements && job.missingRequirements.length > 0) {
+            skillsDisplay += `
+                <div class="job-skills-category missing">
+                    <h4><i class="fas fa-exclamation-triangle"></i> Missing Requirements</h4>
+                    <div class="job-skills-list">
+                        ${job.missingRequirements.map(req => `<span class="job-skill missing">${req}</span>`).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Fallback to basic skills if no enhanced data
+        if (!skillsDisplay && job.skills) {
+            skillsDisplay = `
+                <div class="job-skills">
+                    ${job.skills.map(skill => `<span class="job-skill">${skill}</span>`).join('')}
+                </div>
+            `;
+        }
+
+        card.innerHTML = `
+            <div class="job-header" onclick="this.parentElement.classList.toggle('expanded')">
+                <div>
+                    <h3 class="job-title">${job.title || 'Job Title Not Available'}</h3>
+                    <p class="job-company">${job.company || 'Company Not Available'}</p>
+                    <p class="job-location"><i class="fas fa-map-marker-alt"></i> ${job.location || 'Remote'}</p>
+                    <p class="job-source"><i class="fas fa-external-link-alt"></i> Source: ${job.source || 'Unknown'}</p>
+                </div>
+                <div class="job-match-info">
+                    <span class="job-match ${this.getMatchClass(job.matchPercentage)}">${job.matchPercentage || 'Processing...'}% Match</span>
+                    <div class="expand-indicator">
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="job-details collapsed">
+                <div class="job-summary">
+                    <p class="job-salary"><i class="fas fa-dollar-sign"></i> ${job.salary || 'Salary not specified'}</p>
+                    <p class="job-type"><i class="fas fa-clock"></i> ${job.type || 'Full-time'}</p>
+                </div>
+                
+                <div class="job-full-details">
+                    ${matchBreakdown}
+                    ${job.reasoning ? `<div class="job-reasoning"><strong>Why this matches:</strong> ${job.reasoning}</div>` : ''}
+                    <p class="job-description">${job.description || 'No description available'}</p>
+                    ${skillsDisplay}
+                </div>
+                
+                <div class="job-actions">
+                    <button class="apply-btn" onclick="window.open('${job.link || '#'}', '_blank')">
+                        <i class="fas fa-paper-plane"></i>
+                        Apply Now
+                    </button>
+                    <button class="save-btn" onclick="this.innerHTML = '<i class=\\'fas fa-check\\'></i> Saved!'">
+                        <i class="fas fa-bookmark"></i>
+                        Save Job
+                    </button>
+                </div>
+            </div>
+        `;
+
+        return card;
+    }
+
+    getMatchClass(matchPercentage) {
+        if (!matchPercentage || matchPercentage === 'Processing...') return 'medium-match';
+        if (matchPercentage >= 80) return 'high-match';
+        if (matchPercentage >= 60) return 'medium-match';
+        if (matchPercentage >= 40) return 'low-match';
+        return 'very-low-match';
+    }
+
+    clearAllFilters() {
+        this.experienceFilter.value = '';
+        this.salaryFilter.value = '';
+        this.timezoneFilter.value = '';
+        this.filterChips.innerHTML = '';
+
+        this.currentFilteredJobs = [];
+        this.displayedJobsCount = 0;
+        this.displayJobResults();
+        
+        // Hide clear filters button
+        if (this.clearFilters) {
+            this.clearFilters.style.display = 'none';
+        }
+    }
+
+    // Fixed applyFilters method with working salary filtering
+    applyFilters() {
+        if (!this.jobResults || this.jobResults.length === 0) return;
+
+        const experienceFilter = this.experienceFilter.value;
+        const salaryFilter = this.salaryFilter.value;
+        const timezoneFilter = this.timezoneFilter.value;
+
+        let filteredJobs = [...this.jobResults];
+
+        // Apply experience filter
+        if (experienceFilter) {
+            filteredJobs = filteredJobs.filter(job => {
+                const title = job.title.toLowerCase();
+                const description = (job.description || '').toLowerCase();
+                
+                if (experienceFilter === 'entry') {
+                    return title.includes('junior') || title.includes('entry') || title.includes('associate') || 
+                           description.includes('entry level') || description.includes('junior') ||
+                           title.includes('intern') || description.includes('0-2 years');
+                } else if (experienceFilter === 'mid') {
+                    return !title.includes('senior') && !title.includes('lead') && !title.includes('principal') &&
+                           !title.includes('junior') && !title.includes('entry') && !title.includes('director') &&
+                           (description.includes('2-5 years') || description.includes('3-6 years') || 
+                            (!description.includes('senior') && !description.includes('lead')));
+                } else if (experienceFilter === 'senior') {
+                    return title.includes('senior') || title.includes('lead') || title.includes('principal') ||
+                           description.includes('senior') || description.includes('5+ years') || 
+                           description.includes('6+ years') || description.includes('7+ years');
+                } else if (experienceFilter === 'lead') {
+                    return title.includes('lead') || title.includes('manager') || title.includes('principal') || 
+                           title.includes('architect') || title.includes('director') || title.includes('head of') ||
+                           description.includes('leadership') || description.includes('management');
+                }
+                return true;
+            });
+        }
+
+        // Apply salary filter - FIXED IMPLEMENTATION
+        if (salaryFilter) {
+            filteredJobs = filteredJobs.filter(job => {
+                const salary = job.salary || '';
+                if (salary === 'Salary not specified' || salary === '' || salary === 'Not specified') {
+                    return false; // Exclude jobs without salary info when filtering by salary
+                }
+                
+                const salaryText = salary.toLowerCase();
+                const salaryNumbers = this.extractSalaryNumbers(salary);
+                
+                if (salaryFilter === '50k') {
+                    // $50k+
+                    return salaryNumbers.min >= 50000 || salaryNumbers.max >= 50000;
+                } else if (salaryFilter === '75k') {
+                    // $75k+
+                    return salaryNumbers.min >= 75000 || salaryNumbers.max >= 75000;
+                } else if (salaryFilter === '100k') {
+                    // $100k+
+                    return salaryNumbers.min >= 100000 || salaryNumbers.max >= 100000;
+                } else if (salaryFilter === '125k') {
+                    // $125k+
+                    return salaryNumbers.min >= 125000 || salaryNumbers.max >= 125000;
+                } else if (salaryFilter === '150k') {
+                    // $150k+
+                    return salaryNumbers.min >= 150000 || salaryNumbers.max >= 150000;
+                }
+                return true;
+            });
+        }
+
+        // Apply timezone filter
+        if (timezoneFilter) {
+            filteredJobs = filteredJobs.filter(job => {
+                const description = (job.description || '').toLowerCase();
+                const title = job.title.toLowerCase();
+                const location = (job.location || '').toLowerCase();
+                
+                if (timezoneFilter === 'us-only') {
+                    return description.includes('us') || description.includes('united states') || 
+                           description.includes('usa') || location.includes('us') || 
+                           description.includes('est') || description.includes('pst') || 
+                           description.includes('cst') || description.includes('mst') ||
+                           description.includes('eastern') || description.includes('pacific') ||
+                           description.includes('central') || description.includes('mountain');
+                } else if (timezoneFilter === 'global') {
+                    return description.includes('global') || description.includes('worldwide') || 
+                           description.includes('international') || description.includes('any timezone') ||
+                           description.includes('flexible timezone');
+                } else if (timezoneFilter === 'europe') {
+                    return description.includes('europe') || description.includes('eu') || 
+                           description.includes('cet') || description.includes('gmt') ||
+                           description.includes('utc') || location.includes('europe');
+                }
+                return true;
+            });
+        }
+
+        this.displayFilteredResults(filteredJobs);
+        this.updateFilterChips();
+        
+        // Show/hide clear filters button
+        if (this.clearFilters) {
+            const hasFilters = this.experienceFilter.value || this.salaryFilter.value || this.timezoneFilter.value;
+            this.clearFilters.style.display = hasFilters ? 'inline-flex' : 'none';
+        }
+    }
+
+    displayFilteredResults(filteredJobs) {
+        this.currentFilteredJobs = filteredJobs;
+        this.totalJobsElement.textContent = filteredJobs.length;
+        this.jobsGrid.innerHTML = '';
+
+        const initialJobs = filteredJobs.slice(0, 12);
+        initialJobs.forEach(job => {
+            const jobCard = this.createEnhancedJobCard(job);
+            this.jobsGrid.appendChild(jobCard);
+        });
+
+        this.displayedJobsCount = initialJobs.length;
+
+        const avgMatch = initialJobs.length > 0
+            ? Math.round(initialJobs.reduce((sum, job) => sum + (job.matchPercentage || 0), 0) / initialJobs.length)
+            : 0;
+        this.matchPercentage.textContent = `${avgMatch}%`;
+
+        if (filteredJobs.length > 12) {
+            this.loadMore.style.display = 'block';
+        } else {
+            this.loadMore.style.display = 'none';
+        }
+    }
+
+    // Enhanced updateFilterChips method to show filter values more clearly
+    updateFilterChips() {
+        this.filterChips.innerHTML = '';
+
+        const experienceFilter = this.experienceFilter.value;
+        const salaryFilter = this.salaryFilter.value;
+        const timezoneFilter = this.timezoneFilter.value;
+
+        if (experienceFilter) {
+            const expLabels = {
+                'entry': 'Entry Level',
+                'mid': 'Mid Level', 
+                'senior': 'Senior Level',
+                'lead': 'Lead/Management'
+            };
+            this.addFilterChip('Experience', expLabels[experienceFilter] || experienceFilter, () => {
+                this.experienceFilter.value = '';
+                this.applyFilters();
+            });
+        }
+
+        if (salaryFilter) {
+            const salaryLabels = {
+                '50k': '$50k+',
+                '75k': '$75k+',
+                '100k': '$100k+',
+                '125k': '$125k+',
+                '150k': '$150k+'
+            };
+            this.addFilterChip('Salary', salaryLabels[salaryFilter] || salaryFilter, () => {
+                this.salaryFilter.value = '';
+                this.applyFilters();
+            });
+        }
+
+        if (timezoneFilter) {
+            const timezoneLabels = {
+                'us-only': 'US Only',
+                'global': 'Global/Any Timezone',
+                'europe': 'Europe/EU'
+            };
+            this.addFilterChip('Timezone', timezoneLabels[timezoneFilter] || timezoneFilter, () => {
+                this.timezoneFilter.value = '';
+                this.applyFilters();
+            });
+        }
+    }
+
+    // Helper method to extract salary numbers from salary strings
+    extractSalaryNumbers(salaryStr) {
+        const salary = salaryStr.toLowerCase();
+        let min = 0, max = 0;
+        
+        // Remove common currency symbols and text
+        const cleanSalary = salary.replace(/[$£€,]/g, '');
+        
+        // Look for salary patterns
+        const rangeMatch = cleanSalary.match(/(\d+)(?:k|,000)?\s*[-–to]\s*(\d+)(?:k|,000)?/);
+        const singleMatch = cleanSalary.match(/(\d+)(?:k|,000)?/);
+        const fromMatch = cleanSalary.match(/from\s+(\d+)(?:k|,000)?/);
+        const upToMatch = cleanSalary.match(/up\s+to\s+(\d+)(?:k|,000)?/);
+        
+        if (rangeMatch) {
+            // Range: "50k - 75k" or "50,000 - 75,000"
+            min = parseInt(rangeMatch[1]);
+            max = parseInt(rangeMatch[2]);
+            
+            // Handle k notation
+            if (salary.includes('k') || min < 1000) {
+                min *= 1000;
+                max *= 1000;
+            }
+        } else if (fromMatch) {
+            // "From 50k"
+            min = parseInt(fromMatch[1]);
+            if (salary.includes('k') || min < 1000) {
+                min *= 1000;
+            }
+            max = min; // Use same value for comparison
+        } else if (upToMatch) {
+            // "Up to 75k"
+            max = parseInt(upToMatch[1]);
+            if (salary.includes('k') || max < 1000) {
+                max *= 1000;
+            }
+            min = max; // Use same value for comparison
+        } else if (singleMatch) {
+            // Single number "50k" or "50000"
+            const num = parseInt(singleMatch[1]);
+            if (salary.includes('k') || num < 1000) {
+                min = max = num * 1000;
+            } else {
+                min = max = num;
+            }
+        }
+        
+        return { min, max };
+    }
+
+    addFilterChip(label, value, onRemove) {
+        const chip = document.createElement('span');
+        chip.className = 'filter-chip';
+
+        const removeIcon = document.createElement('i');
+        removeIcon.className = 'fas fa-times';
+        removeIcon.addEventListener('click', (e) => {
+            e.stopPropagation();
+            chip.remove();
+            onRemove();
+        });
+
+        chip.textContent = `${label}: ${value} `;
+        chip.appendChild(removeIcon);
+        this.filterChips.appendChild(chip);
+    }
+
+    loadMoreJobs() {
+        // Load from remaining jobs if they exist, otherwise from filtered results
+        let jobsToLoadFrom = [];
+        if (this.remainingJobs && this.remainingJobs.length > 0) {
+            jobsToLoadFrom = this.remainingJobs.splice(0, 12); // Take 12 from remaining
+        } else {
+            const jobsToUse = this.currentFilteredJobs.length > 0 ? this.currentFilteredJobs : this.jobResults;
+            jobsToLoadFrom = jobsToUse.slice(this.displayedJobsCount, this.displayedJobsCount + 12);
+        }
+
+        jobsToLoadFrom.forEach(job => {
+            const jobCard = this.createEnhancedJobCard(job);
+            this.jobsGrid.appendChild(jobCard);
+        });
+
+        this.displayedJobsCount += jobsToLoadFrom.length;
+
+        // Hide load more if no more jobs
+        const hasMoreJobs = (this.remainingJobs && this.remainingJobs.length > 0) ||
+                           (this.currentFilteredJobs.length > this.displayedJobsCount) ||
+                           (this.jobResults.length > this.displayedJobsCount);
+
+        if (!hasMoreJobs) {
+            this.loadMore.style.display = 'none';
+        }
+    }
+
+    showLoading(show, message = '') {
+        if (show) {
+            this.loadingSection.style.display = 'block';
+            if (message) {
+                this.loadingMessage.textContent = message;
+            }
+            this.progressFill.style.width = '0%';
+        } else {
+            this.loadingSection.style.display = 'none';
+        }
+    }
+
+    showError(message) {
+        this.errorMessage.textContent = message;
+        this.errorSection.style.display = 'block';
+        this.resultsSection.style.display = 'none';
+    }
+
+    hideError() {
+        this.errorSection.style.display = 'none';
+        const retryBtn = document.getElementById('retry-button');
+        if (retryBtn) {
+            retryBtn.remove();
+        }
+    }
+
+    addRetryButton() {
+        const existingRetryBtn = document.getElementById('retry-button');
+        if (existingRetryBtn) {
+            existingRetryBtn.remove();
+        }
+
+        const retryBtn = document.createElement('button');
+        retryBtn.id = 'retry-button';
+        retryBtn.className = 'retry-btn';
+        retryBtn.innerHTML = '<i class="fas fa-redo"></i> Try Again';
+        retryBtn.onclick = () => this.startJobSearch();
+
+        this.errorSection.appendChild(retryBtn);
+    }
+}
+
+// Initialize the enhanced app when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    new AIJobMatcher();
+});
