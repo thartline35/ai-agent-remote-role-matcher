@@ -7,7 +7,13 @@ import cors from "cors";
 import multer from "multer";
 import PDFParser from 'pdf2json';
 import path from "path";
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import { analyzeResume, scrapeJobListings } from "./tools.js";
+
+// Get __dirname equivalent for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Load environment variables - use local.env for development, Vercel env vars for production
 if (process.env.NODE_ENV !== 'production') {
@@ -15,7 +21,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 // Middleware with enhanced configuration
 app.use(cors({
@@ -23,14 +29,28 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
-// Serve static files for Vercel
-app.use(express.static('.', {
-    setHeaders: (res, path) => {
-        if (path.endsWith('.js')) {
+
+// Serve static files from root directory for Vercel
+app.use(express.static(path.join(__dirname), {
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.js')) {
             res.setHeader('Content-Type', 'application/javascript');
-        } else if (path.endsWith('.css')) {
+        } else if (filePath.endsWith('.css')) {
             res.setHeader('Content-Type', 'text/css');
-        } else if (path.endsWith('.html')) {
+        } else if (filePath.endsWith('.html')) {
+            res.setHeader('Content-Type', 'text/html');
+        }
+    }
+}));
+
+// Also serve static files from public directory
+app.use(express.static(path.join(__dirname, 'public'), {
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript');
+        } else if (filePath.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css');
+        } else if (filePath.endsWith('.html')) {
             res.setHeader('Content-Type', 'text/html');
         }
     }
