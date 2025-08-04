@@ -6,6 +6,7 @@ import express from "express";
 import cors from "cors";
 import multer from "multer";
 import PDFParser from 'pdf2json';
+import path from "path";
 import { analyzeResume, scrapeJobListings } from "./tools.js";
 
 dotenv.config({ path: './local.env' });
@@ -492,6 +493,11 @@ app.post('/api/search-jobs', async (req, res) => {
     }
 });
 
+// Route route
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 // Error handling middleware
 app.use((error, req, res, next) => {
     console.error('Global error handler:', error);
@@ -528,61 +534,64 @@ process.on('SIGINT', () => {
     process.exit(0);
 });
 
-// Start server with enhanced logging
-app.listen(port, () => {
-    console.log('\n' + '='.repeat(50));
-    console.log('🚀 ENHANCED AI JOB MATCHER SERVER STARTED');
-    console.log('='.repeat(50));
-    console.log(`📍 Server URL: http://localhost:${port}`);
-    console.log(`⏰ Started at: ${new Date().toISOString()}`);
-    console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
-    
-    console.log('\n📋 AVAILABLE ENDPOINTS:');
-    console.log('  GET  /api/health           - Health check');
-    console.log('  POST /api/parse-pdf        - Parse PDF resume');
-    console.log('  POST /api/analyze-resume   - Analyze resume text');
-    console.log('  POST /api/search-jobs      - Search for matching jobs');
-    
-    console.log('\n🔑 API CONFIGURATION STATUS:');
-    console.log(`  OpenAI API Key:     ${process.env.OPENAI_API_KEY ? '✅ Configured' : '❌ Missing (REQUIRED)'}`);
-    console.log(`  Adzuna App ID:      ${process.env.ADZUNA_APP_ID ? '✅ Configured' : '❌ Missing (Optional)'}`);
-    console.log(`  Adzuna API Key:     ${process.env.ADZUNA_API_KEY ? '✅ Configured' : '❌ Missing (Optional)'}`);
-    console.log(`  TheMuse API Key:    ${process.env.THEMUSE_API_KEY ? '✅ Configured' : '❌ Missing (Optional)'}`);
-    console.log(`  Reed API Key:       ${process.env.REED_API_KEY ? '✅ Configured' : '❌ Missing (Optional)'}`);
-    console.log(`  RapidAPI Key:       ${process.env.RAPIDAPI_KEY ? '✅ Configured' : '❌ Missing (Optional)'}`);
-    
-    // Count configured APIs
-    const configuredAPIs = [
-        process.env.ADZUNA_APP_ID && process.env.ADZUNA_API_KEY,
-        process.env.THEMUSE_API_KEY,
-        process.env.REED_API_KEY,
-        process.env.RAPIDAPI_KEY
-    ].filter(Boolean).length;
-    
-    console.log(`\n📊 JOB SEARCH CAPABILITY: ${configuredAPIs}/4 APIs configured`);
-    
-    if (!process.env.OPENAI_API_KEY) {
-        console.log('\n⚠️  WARNING: OpenAI API key is missing! Resume analysis will fail.');
-    }
-    
-    if (configuredAPIs === 0) {
-        console.log('⚠️  WARNING: No job search APIs configured! Job search will fail.');
-    } else if (configuredAPIs < 4) {
-        console.log(`ℹ️  INFO: ${4 - configuredAPIs} job search APIs are missing. Some job sources won't be available.`);
-    }
-    
-    console.log('\n🎯 FEATURES ENABLED:');
-    console.log('  ✅ Enhanced resume analysis with role understanding');
-    console.log('  ✅ Remote job filtering');
-    console.log('  ✅ AI-powered job matching');
-    console.log('  ✅ Real-time job search updates');
-    console.log('  ✅ Comprehensive error handling');
-    console.log('  ✅ Request timeout management');
-    console.log('  ✅ Rate limiting protection');
-    
-    console.log('\n' + '='.repeat(50));
-    console.log('Ready to process job matching requests! 🎉');
-    console.log('='.repeat(50) + '\n');
-});
+// Start server if not in Vercel environment
+if (process.env.NODE_ENV !== 'production') {
+    // Start server with enhanced logging
+    app.listen(port, () => {
+        console.log('\n' + '='.repeat(50));
+        console.log('🚀 ENHANCED AI JOB MATCHER SERVER STARTED');
+        console.log('='.repeat(50));
+        console.log(`📍 Server URL: http://localhost:${port}`);
+        console.log(`⏰ Started at: ${new Date().toISOString()}`);
+        console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
+        
+        console.log('\n📋 AVAILABLE ENDPOINTS:');
+        console.log('  GET  /api/health           - Health check');
+        console.log('  POST /api/parse-pdf        - Parse PDF resume');
+        console.log('  POST /api/analyze-resume   - Analyze resume text');
+        console.log('  POST /api/search-jobs      - Search for matching jobs');
+        
+        console.log('\n🔑 API CONFIGURATION STATUS:');
+        console.log(`  OpenAI API Key:     ${process.env.OPENAI_API_KEY ? '✅ Configured' : '❌ Missing (REQUIRED)'}`);
+        console.log(`  Adzuna App ID:      ${process.env.ADZUNA_APP_ID ? '✅ Configured' : '❌ Missing (Optional)'}`);
+        console.log(`  Adzuna API Key:     ${process.env.ADZUNA_API_KEY ? '✅ Configured' : '❌ Missing (Optional)'}`);
+        console.log(`  TheMuse API Key:    ${process.env.THEMUSE_API_KEY ? '✅ Configured' : '❌ Missing (Optional)'}`);
+        console.log(`  Reed API Key:       ${process.env.REED_API_KEY ? '✅ Configured' : '❌ Missing (Optional)'}`);
+        console.log(`  RapidAPI Key:       ${process.env.RAPIDAPI_KEY ? '✅ Configured' : '❌ Missing (Optional)'}`);
+        
+        // Count configured APIs
+        const configuredAPIs = [
+            process.env.ADZUNA_APP_ID && process.env.ADZUNA_API_KEY,
+            process.env.THEMUSE_API_KEY,
+            process.env.REED_API_KEY,
+            process.env.RAPIDAPI_KEY
+        ].filter(Boolean).length;
+        
+        console.log(`\n📊 JOB SEARCH CAPABILITY: ${configuredAPIs}/4 APIs configured`);
+        
+        if (!process.env.OPENAI_API_KEY) {
+            console.log('\n⚠️  WARNING: OpenAI API key is missing! Resume analysis will fail.');
+        }
+        
+        if (configuredAPIs === 0) {
+            console.log('⚠️  WARNING: No job search APIs configured! Job search will fail.');
+        } else if (configuredAPIs < 4) {
+            console.log(`ℹ️  INFO: ${4 - configuredAPIs} job search APIs are missing. Some job sources won't be available.`);
+        }
+        
+        console.log('\n🎯 FEATURES ENABLED:');
+        console.log('  ✅ Enhanced resume analysis with role understanding');
+        console.log('  ✅ Remote job filtering');
+        console.log('  ✅ AI-powered job matching');
+        console.log('  ✅ Real-time job search updates');
+        console.log('  ✅ Comprehensive error handling');
+        console.log('  ✅ Request timeout management');
+        console.log('  ✅ Rate limiting protection');
+        
+        console.log('\n' + '='.repeat(50));
+        console.log('Ready to process job matching requests! 🎉');
+        console.log('='.repeat(50) + '\n');
+    });
+}
 
 module.exports = app;
