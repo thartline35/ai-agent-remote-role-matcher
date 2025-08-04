@@ -2,7 +2,7 @@
 
 **Enhanced Remote Job Matching with AI-Powered Resume Analysis**
 
-An intelligent web application that analyzes your resume, extracts your skills, and finds high-quality remote job opportunities that perfectly match your expertise. Powered by OpenAI GPT and real-time job scraping with advanced filtering.
+An intelligent web application that analyzes your resume, extracts your skills, and finds high-quality remote job opportunities that match your expertise. Powered by OpenAI GPT and real-time job scraping with advanced filtering.
 
 ## ✨ Enhanced Features
 
@@ -16,15 +16,15 @@ An intelligent web application that analyzes your resume, extracts your skills, 
 
 ⚡ **Real Application Links**: Direct links to actual job application pages from all sources
 
-💰 **Working Salary Filtering**: Advanced salary parsing and filtering that actually works - filter by $50k+, $75k+, $100k+, $125k+, $150k+
+💰 **Working Salary Filtering**: Advanced salary parsing and filtering that works - filter by $50k+, $75k+, $100k+, $125k+, $150k+
 
 📊 **Enhanced Experience Filtering**: Smart filtering by experience level (Entry, Mid, Senior, Lead) with description-based matching
 
-🌐 **Timezone Filtering**: Filter by US Only, Global/Any Timezone, or Europe/EU preferences
+🌐 **Timezone Filtering**: Filter by EST, CST, MST, PST, GTM/UTC, or Any Timezone
 
 🎨 **Modern UI**: Beautiful, responsive interface with drag-and-drop file upload and categorized skill display
 
-⚡ **Optimized Performance**: Sequential processing prevents timeouts while ensuring high-quality results
+⚡ **Optimized Performance**: Sequential processing helps prevent timeouts while ensuring high-quality results
 
 🚫 **Zero Dummy Data**: All features work with real data only - no test or hardcoded information
 
@@ -45,12 +45,12 @@ An intelligent web application that analyzes your resume, extracts your skills, 
 - **Result**: Returns manageable number of high-quality matches (50-400 instead of thousands)
 
 ### 2. **FIXED: Salary Filter Not Working**
-- **Problem**: Frontend had placeholder code returning true for all jobs
+- **Problem**: Frontend logic was not fully developed, causing the code to return true for all jobs
 - **Solution**: Proper salary extraction and filtering logic
 - **Result**: Working filter logic for $50k+, $75k+, $100k+, $125k+, $150k+
 
 ### 3. **FIXED: Enhanced Role Matching**
-- **Problem**: Basic matching was too simplistic
+- **Problem**: Basic matching was too simplistic, and then advanced matching was overfitting.
 - **Solution**: Weighted scoring system using resume analysis data
 - **Result**: Technical Skills (35%), Work Experience (30%), Industry Match (20%), Responsibilities (15%)
 
@@ -84,6 +84,7 @@ This application supports real job data from multiple sources with intelligent f
 - LinkedIn Jobs, Indeed, Glassdoor, Remote.co
 - Real-time job scraping with intelligent filtering
 - Respects robots.txt and includes proper rate limiting
+- Note: Some sources have blocking functionality that prevents web scraping. 
 
 **Environment Variables**
 Update your local.env file to include:
@@ -109,7 +110,7 @@ REED_API_KEY=your_reed_api_key_here
 
 ### Prerequisites
 - Node.js (v16 or higher)
-- OpenAI API key
+- OpenAI API key and tokens purchase (I purchased the $5.00 package to start.)
 - Modern web browser
 
 ### Installation
@@ -132,6 +133,7 @@ REED_API_KEY=your_reed_api_key_here
    ADZUNA_API_KEY=your_adzuna_api_key_here
    THEMUSE_API_KEY=your_themuse_api_key_here
    REED_API_KEY=your_reed_api_key_here
+   RAPIDAPI_KEY=your_rapidapi_key_here
    ```
 
 4. **Get API Keys**:
@@ -139,6 +141,7 @@ REED_API_KEY=your_reed_api_key_here
    - Adzuna: https://developer.adzuna.com/
    - TheMuse: https://www.themuse.com/developers
    - Reed: https://www.reed.co.uk/developers/
+   - RapidAPI: https://www.rapidapi.com/console/
 
 5. **Start the server**
    ```bash
@@ -255,6 +258,12 @@ ai-agent/
 - **Cost**: Free with registration
 - **Rate Limit**: 1000 requests per day
 
+### RapidAPI (JSearch & Jobs APIs)
+- **Purpose**: Job search aggregators with multiple job board sources
+- **Get it**: [RapidAPI Platform](https://rapidapi.com/) - Subscribe to JSearch and Jobs API services
+- **Cost**: Free tier available (100-500 requests/month), paid plans from ~$10-20/month
+- **Rate Limit**: 100-500 requests/month (free tier), 1,000-10,000+ requests/month (paid tiers)
+
 ## 🎯 How It Works
 
 ### **Enhanced Resume Analysis**
@@ -363,4 +372,4 @@ MIT License - see LICENSE file for details
 
 **Built with ❤️ for remote job seekers everywhere**
 
-*Last updated: January 2025*
+*Last updated: August 3, 2025*
