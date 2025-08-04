@@ -12,6 +12,9 @@ import { analyzeResume, scrapeJobListings } from "./tools.js";
 // Load environment variables - use local.env for development, Vercel env vars for production
 if (process.env.NODE_ENV !== 'production') {
     dotenv.config({ path: './local.env' });
+} else {
+    // Ensure dotenv is loaded for production (Vercel)
+    dotenv.config();
 }
 
 const app = express();
@@ -599,3 +602,6 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Export for Vercel
 export default app;
+
+// Vercel serverless function handler
+export const handler = app;
