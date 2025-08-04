@@ -554,27 +554,87 @@
                 <!-- All other sections from original HTML -->
                 <!-- Resume Analysis Section -->
                 <div class="analysis-section" id="analysis-section">
-                    <!-- Content will be populated by JavaScript -->
+                    <div class="analysis-content">
+                        <h2>Resume Analysis Results</h2>
+                        <div class="skills-grid" id="skills-grid"></div>
+                    </div>
                 </div>
 
                 <!-- Job Search Section -->
                 <div class="search-section" id="search-section">
-                    <!-- Content will be populated by JavaScript -->
+                    <div class="search-content">
+                        <h2>Refine Your Job Search</h2>
+                        <div class="filters">
+                            <div class="filter-group">
+                                <label for="experience-filter">Experience Level:</label>
+                                <select id="experience-filter">
+                                    <option value="">Any Level</option>
+                                    <option value="entry">Entry Level</option>
+                                    <option value="mid">Mid Level</option>
+                                    <option value="senior">Senior Level</option>
+                                    <option value="lead">Lead/Management</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label for="salary-filter">Minimum Salary:</label>
+                                <select id="salary-filter">
+                                    <option value="">Any Salary</option>
+                                    <option value="50k">$50k+</option>
+                                    <option value="75k">$75k+</option>
+                                    <option value="100k">$100k+</option>
+                                    <option value="125k">$125k+</option>
+                                    <option value="150k">$150k+</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label for="timezone-filter">Timezone:</label>
+                                <select id="timezone-filter">
+                                    <option value="">Any Timezone</option>
+                                    <option value="us-only">US Only</option>
+                                    <option value="global">Global/Any Timezone</option>
+                                    <option value="europe">Europe/EU</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button class="primary-button" id="start-search">
+                            <i class="fas fa-search"></i>
+                            Start Job Search
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Loading Section -->
                 <div class="loading-section" id="loading-section">
-                    <!-- Content will be populated by JavaScript -->
+                    <div class="loading-content">
+                        <div class="spinner"></div>
+                        <p id="loading-message">Processing...</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Results Section -->
                 <div class="results-section" id="results-section">
-                    <!-- Content will be populated by JavaScript -->
+                    <div class="results-header">
+                        <h2>Job Matches Found</h2>
+                        <div class="results-stats">
+                            <span>Total Jobs: <span id="total-jobs">0</span></span>
+                            <span>Average Match: <span id="match-percentage">0%</span></span>
+                        </div>
+                        <div class="filter-chips" id="filter-chips"></div>
+                        <button class="clear-filters" id="clear-filters">Clear Filters</button>
+                    </div>
+                    <div class="jobs-grid" id="jobs-grid"></div>
+                    <button class="load-more" id="load-more" style="display: none;">Load More Jobs</button>
                 </div>
 
                 <!-- Error Section -->
                 <div class="error-section" id="error-section">
-                    <!-- Content will be populated by JavaScript -->
+                    <div class="error-content">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p id="error-message">An error occurred. Please try again.</p>
+                    </div>
                 </div>
             </main>
 
