@@ -507,7 +507,7 @@ app.post('/api/search-jobs', async (req, res) => {
     }
 });
 
-// Root route
+// Root route - serve the main application
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
