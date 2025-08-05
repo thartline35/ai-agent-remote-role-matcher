@@ -23,35 +23,7 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
-
-// Serve static files from root directory for Vercel
-// REMOVE the problematic line above and replace with:
-
-// Serve specific files only
-app.get('/frontend.js', (req, res) => {
-    res.setHeader('Content-Type', 'application/javascript');
-    res.sendFile(path.join(__dirname, 'frontend.js'));
-});
-
-app.get('/index.css', (req, res) => {
-    res.setHeader('Content-Type', 'text/css');
-    res.sendFile(path.join(__dirname, 'index.css'));
-});
-
-// Also serve static files from public directory
-app.use(express.static(path.join(__dirname, 'public'), {
-    setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.js')) {
-            res.setHeader('Content-Type', 'application/javascript');
-        } else if (filePath.endsWith('.css')) {
-            res.setHeader('Content-Type', 'text/css');
-        } else if (filePath.endsWith('.html')) {
-            res.setHeader('Content-Type', 'text/html');
-        }
-    }
-}));
-
-
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Enhanced timeout middleware with different timeouts for different endpoints
 app.use((req, res, next) => {
@@ -85,11 +57,6 @@ app.use((req, res, next) => {
 
     next();
 });
-
-// Add body parsing middleware for API routes
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
