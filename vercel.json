@@ -1,40 +1,6 @@
 {
   "version": 2,
   "buildCommand": "npm install",
-  "routes": [
-    {
-      "src": "/index.css",
-      "dest": "/index.css",
-      "headers": {
-        "Content-Type": "text/css; charset=utf-8",
-        "Cache-Control": "public, max-age=86400"
-      }
-    },
-    {
-      "src": "/frontend.js", 
-      "dest": "/frontend.js",
-      "headers": {
-        "Content-Type": "application/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=86400"
-      }
-    },
-    {
-      "src": "/tools.js", 
-      "dest": "/tools.js",
-      "headers": {
-        "Content-Type": "application/javascript; charset=utf-8",
-        "Cache-Control": "public, max-age=86400"
-      }
-    },
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    },
-    {
-      "src": "/",
-      "dest": "/index.html"
-    }
-  ],
   "functions": {
     "api/**/*.js": {
       "maxDuration": 300
@@ -57,13 +23,21 @@
           "value": "Content-Type, Authorization"
         }
       ]
+    },
+    {
+      "source": "/(.*\\.(css|js))",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
     }
   ],
-  "redirects": [
+  "rewrites": [
     {
-      "source": "/index.js",
-      "destination": "/",
-      "permanent": false
+      "source": "/",
+      "destination": "/index.html"
     }
   ]
 }
