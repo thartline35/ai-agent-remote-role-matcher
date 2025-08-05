@@ -12,6 +12,14 @@
       "dest": "/api/$1"
     },
     {
+      "src": "/index.css",
+      "dest": "/index.css"
+    },
+    {
+      "src": "/frontend.js",
+      "dest": "/frontend.js"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.js"
     }
