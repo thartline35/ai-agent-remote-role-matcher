@@ -421,7 +421,7 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
 
         if (finalResults.length === 0) {
             // UPDATED ERROR MESSAGE with lower threshold
-            throw new Error('No jobs found with 60% or higher match. The job market may be limited right now, or try updating your resume with more common job titles and skills that appear in job postings.');
+            throw new Error('No jobs found with 70% or higher match. The job market may be limited right now, or try updating your resume with more common job titles and skills that appear in job postings.');
         }
 
         // Final sort by match percentage
@@ -445,10 +445,11 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
 }
 
 // New function to filter jobs with 60%+ match immediately
-// FIXED: Lower the threshold for high match jobs to 60% instead of 70%
+// FIND this function in tools.js and REPLACE it:
+
 async function filterHighMatchJobs(jobs, analysis, openai, processedJobs) {
     const highMatchJobs = [];
-    const batchSize = 5; // Increased batch size for faster processing
+    const batchSize = 5;
     
     for (let i = 0; i < jobs.length; i += batchSize) {
         const batch = jobs.slice(i, i + batchSize);
@@ -464,22 +465,22 @@ async function filterHighMatchJobs(jobs, analysis, openai, processedJobs) {
             }
             
             try {
-                await new Promise(resolve => setTimeout(resolve, index * 50)); // Reduced delay for faster processing
+                await new Promise(resolve => setTimeout(resolve, index * 50));
                 
                 // Fast basic match first
                 const basicMatch = calculateEnhancedBasicMatch(job, analysis);
                 
-                // LOWERED THRESHOLD: Accept 60%+ matches for now
-                if (basicMatch >= 50) {
+                // FIXED: Back to 70% threshold for high quality matches
+                if (basicMatch >= 65) {
                     const enhancedMatch = await calculateSingleEnhancedJobMatch(job, analysis, openai);
                     const finalJob = { ...job, ...enhancedMatch };
                     
-                    // LOWERED THRESHOLD: Return if 60% or higher instead of 70%
-                    if (finalJob.matchPercentage >= 60) {
+                    // FIXED: Return only 70% or higher matches
+                    if (finalJob.matchPercentage >= 70) {
                         return finalJob;
                     }
-                } else if (basicMatch >= 60) {
-                    // Use basic match if already high enough
+                } else if (basicMatch >= 75) {
+                    // Use basic match if it's already very high
                     return {
                         ...job,
                         matchPercentage: basicMatch,
@@ -487,7 +488,7 @@ async function filterHighMatchJobs(jobs, analysis, openai, processedJobs) {
                         matchedSoftSkills: [],
                         matchedExperience: [],
                         missingRequirements: [],
-                        reasoning: 'Good basic match - meets threshold without AI analysis',
+                        reasoning: 'High basic match - meets 70% threshold',
                         industryMatch: basicMatch,
                         seniorityMatch: basicMatch,
                         growthPotential: 'medium'
@@ -496,11 +497,11 @@ async function filterHighMatchJobs(jobs, analysis, openai, processedJobs) {
                 
                 return null;
 
-    } catch (error) {
+            } catch (error) {
                 console.error(`Match calculation failed for "${job.title}":`, error.message);
-                // FALLBACK: Return job with basic match if AI fails
+                // FALLBACK: Only return if basic match is 70% or higher
                 const basicMatch = calculateEnhancedBasicMatch(job, analysis);
-                if (basicMatch >= 50) {
+                if (basicMatch >= 70) {
                     return {
                         ...job,
                         matchPercentage: basicMatch,
@@ -508,7 +509,7 @@ async function filterHighMatchJobs(jobs, analysis, openai, processedJobs) {
                         matchedSoftSkills: [],
                         matchedExperience: [],
                         missingRequirements: [],
-                        reasoning: 'AI analysis failed - using basic match',
+                        reasoning: 'AI analysis failed - using basic match above 70%',
                         industryMatch: basicMatch,
                         seniorityMatch: basicMatch,
                         growthPotential: 'medium'
@@ -529,7 +530,7 @@ async function filterHighMatchJobs(jobs, analysis, openai, processedJobs) {
         }
         
         if (i + batchSize < jobs.length) {
-            await new Promise(resolve => setTimeout(resolve, 200)); // Reduced delay for faster processing
+            await new Promise(resolve => setTimeout(resolve, 200));
         }
     }
     
