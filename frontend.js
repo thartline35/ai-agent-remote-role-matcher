@@ -571,19 +571,26 @@ class AIJobMatcher {
         console.log(`🎉 COMPLETED: ${this.totalJobs} total jobs found!`);
     }
 
-    // FIXED: Update job statistics in real-time
+    // REAL AI MATCHING - Update job statistics with real match data
     updateJobStats() {
         if (this.totalJobsElement) {
             this.totalJobsElement.textContent = this.totalJobs;
         }
         
-        // Calculate average match percentage
+        // Calculate REAL average match percentage from AI analysis
         if (this.jobResults.length > 0) {
-            const avgMatch = Math.round(
-                this.jobResults.reduce((sum, job) => sum + (job.matchPercentage || 0), 0) / this.jobResults.length
-            );
-            if (this.matchPercentage) {
-                this.matchPercentage.textContent = `${avgMatch}%`;
+            const jobsWithMatches = this.jobResults.filter(job => job.matchPercentage);
+            if (jobsWithMatches.length > 0) {
+                const avgMatch = Math.round(
+                    jobsWithMatches.reduce((sum, job) => sum + job.matchPercentage, 0) / jobsWithMatches.length
+                );
+                if (this.matchPercentage) {
+                    this.matchPercentage.textContent = `${avgMatch}%`;
+                }
+            } else {
+                if (this.matchPercentage) {
+                    this.matchPercentage.textContent = 'Analyzing...';
+                }
             }
         }
     }
@@ -610,9 +617,84 @@ class AIJobMatcher {
         const card = document.createElement('div');
         card.className = 'job-card';
 
-        // Enhanced match display
+        // REAL AI MATCH PERCENTAGE from OpenAI analysis
         const matchPercentage = job.matchPercentage || 0;
         const matchClass = this.getMatchClass(matchPercentage);
+
+        // Enhanced match breakdown with REAL AI data
+        let matchBreakdown = '';
+        if (job.industryMatch !== undefined || job.seniorityMatch !== undefined || job.growthPotential) {
+            matchBreakdown = `
+                <div class="match-breakdown">
+                    <div class="match-item">
+                        <span class="match-label">Overall Match:</span>
+                        <span class="match-value">${job.matchPercentage || 0}%</span>
+                    </div>
+                    ${job.industryMatch !== undefined ? `
+                    <div class="match-item">
+                        <span class="match-label">Industry Fit:</span>
+                        <span class="match-value">${job.industryMatch}%</span>
+                    </div>` : ''}
+                    ${job.seniorityMatch !== undefined ? `
+                    <div class="match-item">
+                        <span class="match-label">Level Match:</span>
+                        <span class="match-value">${job.seniorityMatch}%</span>
+                    </div>` : ''}
+                    ${job.growthPotential ? `
+                    <div class="match-item">
+                        <span class="match-label">Growth:</span>
+                        <span class="match-value growth-${job.growthPotential}">${job.growthPotential}</span>
+                    </div>` : ''}
+                </div>
+            `;
+        }
+
+        // REAL AI skills analysis
+        let skillsDisplay = '';
+        
+        if (job.matchedTechnicalSkills && job.matchedTechnicalSkills.length > 0) {
+            skillsDisplay += `
+                <div class="job-skills-category">
+                    <h4><i class="fas fa-code"></i> Matched Technical Skills</h4>
+                    <div class="job-skills-list">
+                        ${job.matchedTechnicalSkills.map(skill => `<span class="job-skill technical matched">${skill}</span>`).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        if (job.matchedSoftSkills && job.matchedSoftSkills.length > 0) {
+            skillsDisplay += `
+                <div class="job-skills-category">
+                    <h4><i class="fas fa-users"></i> Matched Soft Skills</h4>
+                    <div class="job-skills-list">
+                        ${job.matchedSoftSkills.map(skill => `<span class="job-skill soft matched">${skill}</span>`).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        if (job.matchedExperience && job.matchedExperience.length > 0) {
+            skillsDisplay += `
+                <div class="job-skills-category">
+                    <h4><i class="fas fa-briefcase"></i> Matched Experience</h4>
+                    <div class="job-skills-list">
+                        ${job.matchedExperience.map(exp => `<span class="job-skill experience matched">${exp}</span>`).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        if (job.missingRequirements && job.missingRequirements.length > 0) {
+            skillsDisplay += `
+                <div class="job-skills-category missing">
+                    <h4><i class="fas fa-exclamation-triangle"></i> Missing Requirements</h4>
+                    <div class="job-skills-list">
+                        ${job.missingRequirements.map(req => `<span class="job-skill missing">${req}</span>`).join('')}
+                    </div>
+                </div>
+            `;
+        }
 
         card.innerHTML = `
             <div class="job-header" onclick="this.parentElement.classList.toggle('expanded')">
@@ -623,7 +705,7 @@ class AIJobMatcher {
                     <p class="job-source"><i class="fas fa-external-link-alt"></i> Source: ${job.source || 'Unknown'}</p>
                 </div>
                 <div class="job-match-info">
-                    <span class="job-match ${matchClass}">${matchPercentage}% Match</span>
+                    <span class="job-match ${matchClass}">${matchPercentage}% Overall Match</span>
                     <div class="expand-indicator">
                         <i class="fas fa-chevron-down"></i>
                     </div>
@@ -637,10 +719,10 @@ class AIJobMatcher {
                 </div>
                 
                 <div class="job-full-details">
-                    <div class="match-explanation">
-                        <p><strong>Match Reason:</strong> This role matches your background in ${this.getMatchReason(job)}</p>
-                    </div>
+                    ${matchBreakdown}
+                    ${job.reasoning ? `<div class="job-reasoning"><strong>Comprehensive Analysis:</strong> ${job.reasoning}</div>` : ''}
                     <p class="job-description">${this.truncateDescription(job.description || 'No description available')}</p>
+                    ${skillsDisplay}
                 </div>
                 
                 <div class="job-actions">
@@ -657,6 +739,13 @@ class AIJobMatcher {
         `;
 
         return card;
+    }
+
+    getMatchClass(matchPercentage) {
+        if (matchPercentage >= 85) return 'high-match';
+        if (matchPercentage >= 75) return 'good-match';
+        if (matchPercentage >= 70) return 'medium-match';
+        return 'low-match';
     }
 
     getMatchClass(matchPercentage) {
@@ -808,10 +897,16 @@ class AIJobMatcher {
 
         this.displayedJobsCount = filteredJobs.length;
 
-        const avgMatch = filteredJobs.length > 0
-            ? Math.round(filteredJobs.reduce((sum, job) => sum + (job.matchPercentage || 0), 0) / filteredJobs.length)
-            : 0;
-        this.matchPercentage.textContent = `${avgMatch}%`;
+        // REAL AI MATCH AVERAGE from filtered jobs
+        const jobsWithMatches = filteredJobs.filter(job => job.matchPercentage);
+        if (jobsWithMatches.length > 0) {
+            const avgMatch = Math.round(
+                jobsWithMatches.reduce((sum, job) => sum + job.matchPercentage, 0) / jobsWithMatches.length
+            );
+            this.matchPercentage.textContent = `${avgMatch}%`;
+        } else {
+            this.matchPercentage.textContent = 'No matches';
+        }
     }
 
     updateFilterChips() {
