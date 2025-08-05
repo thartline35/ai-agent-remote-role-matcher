@@ -1,3 +1,4 @@
+// testing changes
 // Enhanced Frontend.js for AI Job Matcher with improved resume analysis
 class AIJobMatcher {
     constructor() {
@@ -445,29 +446,31 @@ class AIJobMatcher {
 
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
+                            let jsonStr = '';  // <-- MOVED OUTSIDE try block
                             try {
-                                const jsonStr = line.slice(6).trim();
-                                if (!jsonStr) continue; // Skip empty lines
+                                jsonStr = line.slice(6).trim();
+                                if (!jsonStr) continue;
+                                
+                                // Skip malformed JSON
+                                if (!jsonStr.startsWith('{') || (!jsonStr.endsWith('}') && !jsonStr.endsWith('}}'))) {
+                                    console.warn('Skipping malformed JSON');
+                                    continue;
+                                }
                                 
                                 const data = JSON.parse(jsonStr);
                                 console.log('Received job search data:', data.type, data);
-
+                    
                                 switch (data.type) {
                                     case 'jobs_found':
                                         console.log(`Received ${data.jobs.length} jobs from ${data.source}`);
                                         this.jobResults.push(...data.jobs);
-
                                         this.loadingMessage.textContent = `Found ${data.totalFound} remote jobs from ${data.source}...`;
                                         this.updateProgressBar(30 + (this.jobResults.length / 50) * 40);
-
-                                        // Show jobs immediately as they come in
                                         this.displayJobResults();
                                         break;
-
+                    
                                     case 'search_complete':
                                         console.log('Job search completed:', data);
-                                        
-                                        // Handle pagination format
                                         if (data.initialJobs && data.remainingJobs !== undefined) {
                                             this.jobResults = data.initialJobs;
                                             this.remainingJobs = data.remainingJobs;
@@ -477,12 +480,11 @@ class AIJobMatcher {
                                             this.remainingJobs = [];
                                             this.totalJobs = this.jobResults.length;
                                         }
-                                        
                                         this.displayJobResults();
                                         this.showLoading(false);
                                         clearTimeoutOnComplete();
                                         return;
-
+                    
                                     case 'error':
                                         this.showError(data.error);
                                         this.showLoading(false);
@@ -490,10 +492,8 @@ class AIJobMatcher {
                                         return;
                                 }
                             } catch (parseError) {
-                                console.error('Error parsing job search SSE data:', parseError);
-                                console.error('Problematic line:', line);
-                                console.error('JSON string:', jsonStr);
-                                // Continue processing other lines instead of breaking
+                                console.warn('Skipping problematic JSON chunk:', parseError.message);
+                                continue;  // <-- CONTINUE instead of logging the error
                             }
                         }
                     }
