@@ -1064,6 +1064,18 @@ class AIJobMatcher {
 
         this.errorSection.appendChild(retryBtn);
     }
+
+    getSearchFilters() {
+        return {
+            experience: this.experienceFilter.value,
+            salary: this.salaryFilter.value,
+            timezone: this.timezoneFilter.value
+        };
+    }
+
+    updateProgressBar(percentage) {
+        this.progressFill.style.width = `${Math.min(percentage, 100)}%`;
+    }
 }
 
 // Initialize the enhanced app when DOM is loaded
