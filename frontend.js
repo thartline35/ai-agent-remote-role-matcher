@@ -1,4 +1,3 @@
-// testing changes
 // Enhanced Frontend.js for AI Job Matcher with improved resume analysis
 class AIJobMatcher {
     constructor() {
@@ -228,7 +227,7 @@ class AIJobMatcher {
             this.showSearchSection();
             this.showLoading(false);
 
-        } catch (error) {
+        } catch (error) { 
             console.error('Error analyzing resume:', error);
             this.showError('Failed to analyze resume. Please try again.');
             this.showLoading(false);
