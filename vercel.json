@@ -1,19 +1,34 @@
 {
   "version": 2,
+  "buildCommand": "npm install",
   "routes": [
     {
       "src": "/index.css",
       "dest": "/index.css",
       "headers": {
-        "Content-Type": "text/css; charset=utf-8"
+        "Content-Type": "text/css; charset=utf-8",
+        "Cache-Control": "public, max-age=86400"
       }
     },
     {
       "src": "/frontend.js", 
       "dest": "/frontend.js",
       "headers": {
-        "Content-Type": "application/javascript; charset=utf-8"
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=86400"
       }
+    },
+    {
+      "src": "/tools.js", 
+      "dest": "/tools.js",
+      "headers": {
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=86400"
+      }
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
     },
     {
       "src": "/",
@@ -21,8 +36,34 @@
     }
   ],
   "functions": {
-    "api/*.js": {
+    "api/**/*.js": {
       "maxDuration": 300
     }
-  }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods", 
+          "value": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization"
+        }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/index.js",
+      "destination": "/",
+      "permanent": false
+    }
+  ]
 }

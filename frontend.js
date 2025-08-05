@@ -1,4 +1,4 @@
-// Enhanced Frontend.js for AI Job Matcher with improved resume analysis
+// Enhanced Frontend.js for AI Job Matcher with REAL-TIME streaming
 class AIJobMatcher {
     constructor() {
         this.initializeElements();
@@ -16,10 +16,12 @@ class AIJobMatcher {
             seniorityLevel: 'mid'
         };
         this.jobResults = [];
-        this.remainingJobs = [];
         this.totalJobs = 0;
         this.displayedJobsCount = 0;
         this.currentFilteredJobs = [];
+        this.searchProgress = 0;
+        this.sourcesCompleted = 0;
+        this.totalSources = 6;
     }
 
     initializeElements() {
@@ -378,26 +380,28 @@ class AIJobMatcher {
         this.searchSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
+    // FIXED: Enhanced job search with real-time streaming
     async startJobSearch() {
         try {
-            this.showLoading(true, 'Searching for remote jobs matching your profile...');
+            this.showLoading(true, 'Initializing job search...');
             this.hideError();
     
-            // FIXED: Clear previous results and UI for new search
+            // FIXED: Reset state for new search
             this.jobResults = [];
-            this.remainingJobs = [];
             this.totalJobs = 0;
             this.displayedJobsCount = 0;
-            this.jobsGrid.innerHTML = ''; // Clear existing job cards
-            this.resultsSection.style.display = 'none'; // Hide results section
+            this.searchProgress = 0;
+            this.sourcesCompleted = 0;
+            this.jobsGrid.innerHTML = '';
+            this.resultsSection.style.display = 'none';
     
             const filters = this.getSearchFilters();
     
-            console.log('🚀 Starting enhanced job search with streaming...');
-            console.log('Enhanced analysis data:', this.resumeAnalysis);
-            console.log('Search filters:', filters);
+            console.log('🚀 Starting REAL-TIME job search...');
+            console.log('Analysis data:', this.resumeAnalysis);
+            console.log('Filters:', filters);
             
-            // FIXED: Start the streaming request
+            // FIXED: Start streaming request
             const response = await fetch('/api/search-jobs', {
                 method: 'POST',
                 headers: {
@@ -409,20 +413,17 @@ class AIJobMatcher {
                 })
             });
             
-            console.log('📡 Job search response received:', response.status, response.statusText);
-    
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }));
                 throw new Error(errorData.error || `Server error (${response.status})`);
             }
     
-            // FIXED: Set up streaming response handling
+            // FIXED: Handle streaming response
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
+            let buffer = '';
     
-            console.log('📖 Reading streaming job search results...');
-    
-            let buffer = ''; // Buffer for incomplete chunks
+            console.log('📖 Reading real-time job search stream...');
     
             try {
                 while (true) {
@@ -432,11 +433,9 @@ class AIJobMatcher {
                         break;
                     }
     
-                    // FIXED: Handle partial chunks properly
+                    // FIXED: Handle streaming data
                     buffer += decoder.decode(value, { stream: true });
                     const lines = buffer.split('\n');
-                    
-                    // Keep the last incomplete line in the buffer
                     buffer = lines.pop() || '';
     
                     for (const line of lines) {
@@ -446,89 +445,17 @@ class AIJobMatcher {
                                 if (!jsonStr) continue;
                                 
                                 const data = JSON.parse(jsonStr);
-                                console.log('📨 Received streaming data:', data.type, data);
-                    
-                                // FIXED: Handle different streaming events
-                                switch (data.type) {
-                                    case 'search_started':
-                                        this.loadingMessage.textContent = data.message;
-                                        this.updateProgressBar(10);
-                                        break;
-    
-                                    case 'jobs_found':
-                                        console.log(`🎯 REAL-TIME: Received ${data.jobs.length} jobs from ${data.source}`);
-                                        
-                                        // FIXED: Stream individual jobs immediately
-                                        data.jobs.forEach(job => {
-                                            // Add job immediately to results
-                                            this.jobResults.push(job);
-                                            
-                                            // FIXED: Create and display job card immediately
-                                            const jobCard = this.createEnhancedJobCard(job);
-                                            this.jobsGrid.appendChild(jobCard);
-                                            
-                                            // Add smooth animation for new job
-                                            jobCard.style.opacity = '0';
-                                            jobCard.style.transform = 'translateY(20px)';
-                                            
-                                            setTimeout(() => {
-                                                jobCard.style.transition = 'all 0.5s ease-out';
-                                                jobCard.style.opacity = '1';
-                                                jobCard.style.transform = 'translateY(0)';
-                                            }, 100);
-                                        });
-                                        
-                                        // FIXED: Update UI stats immediately
-                                        this.updateJobStatsRealTime();
-                                        
-                                        // FIXED: Show results section if first job
-                                        if (this.resultsSection.style.display === 'none' && this.jobResults.length > 0) {
-                                            this.resultsSection.style.display = 'block';
-                                            this.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                        }
-                                        
-                                        // Update loading message
-                                        this.loadingMessage.textContent = `Found ${this.jobResults.length} matches so far from ${data.source}...`;
-                                        this.updateProgressBar(20 + (this.jobResults.length / 50) * 60);
-                                        break;
-            
-                                    case 'search_complete':
-                                        console.log('🏁 Job search completed:', data);
-                                        
-                                        // FIXED: Jobs are already displayed, just handle final cleanup
-                                        this.remainingJobs = data.remainingJobs || [];
-                                        this.totalJobs = data.totalJobs || this.jobResults.length;
-                                        
-                                        // FIXED: Final stats update
-                                        this.updateJobStatsRealTime();
-                                        
-                                        // Show load more button if needed
-                                        if (this.remainingJobs && this.remainingJobs.length > 0) {
-                                            this.loadMore.style.display = 'block';
-                                        } else {
-                                            this.loadMore.style.display = 'none';
-                                        }
-                                        
-                                        this.showLoading(false);
-                                        console.log('🎉 Real-time streaming completed!');
-                                        return;
-            
-                                    case 'error':
-                                        console.error('❌ Streaming error:', data.error);
-                                        this.showError(data.error);
-                                        this.showLoading(false);
-                                        return;
-                                }
+                                await this.handleStreamingUpdate(data);
+                                
                             } catch (parseError) {
-                                console.warn('⚠️ Failed to parse streaming data:', line, parseError.message);
-                                continue;
+                                console.warn('⚠️ Failed to parse streaming data:', parseError.message);
                             }
                         }
                     }
                 }
             } catch (streamError) {
                 console.error('❌ Stream reading error:', streamError);
-                throw new Error('Failed to read job search results stream');
+                throw new Error('Failed to read job search results');
             } finally {
                 reader.releaseLock();
             }
@@ -538,12 +465,10 @@ class AIJobMatcher {
     
             let userMessage = 'Failed to search for jobs. Please try again.';
     
-            if (error.name === 'AbortError') {
-                userMessage = 'Request timed out. Please try again.';
-            } else if (error.message.includes('No jobs found')) {
+            if (error.message.includes('No jobs found')) {
                 userMessage = error.message;
-            } else if (error.message.includes('API')) {
-                userMessage = 'API service issue. Please try again in a few minutes.';
+            } else if (error.message.includes('timeout')) {
+                userMessage = 'Job search timed out. Please try again.';
             }
     
             this.showError(userMessage);
@@ -551,135 +476,143 @@ class AIJobMatcher {
             this.addRetryButton();
         }
     }
-    
-    // FIXED: New function for real-time stats updates
-    updateJobStatsRealTime() {
-        // Update job count
-        this.totalJobsElement.textContent = this.jobResults.length;
-        
-        // Calculate and update average match percentage in real-time
-        const avgMatch = this.jobResults.length > 0
-            ? Math.round(this.jobResults.reduce((sum, job) => sum + (job.matchPercentage || 0), 0) / this.jobResults.length)
-            : 0;
-        this.matchPercentage.textContent = `${avgMatch}%`;
-        
-        this.displayedJobsCount = this.jobResults.length;
-        
-        console.log(`📊 Updated stats: ${this.jobResults.length} jobs, ${avgMatch}% avg match`);
+
+    // FIXED: Handle different types of streaming updates
+    async handleStreamingUpdate(data) {
+        console.log('📨 Handling streaming update:', data.type);
+
+        switch (data.type) {
+            case 'search_started':
+                this.loadingMessage.textContent = data.message;
+                this.updateProgressBar(5);
+                break;
+
+            case 'progress_update':
+                this.loadingMessage.textContent = data.message;
+                this.updateProgressBar(data.percentage);
+                break;
+
+            case 'jobs_found':
+                await this.handleJobsFound(data);
+                break;
+
+            case 'search_complete':
+                await this.handleSearchComplete(data);
+                break;
+
+            case 'error':
+                console.error('❌ Streaming error:', data.error);
+                this.showError(data.error);
+                this.showLoading(false);
+                break;
+        }
     }
-    
-    // FIXED: Simplified real-time job display (now handled in streaming)
-    displayJobResultsRealTime() {
-        // This function is now mainly used for final cleanup
-        console.log(`📺 Final display check: ${this.jobResults.length} jobs total`);
-        
-        // Ensure all stats are up to date
-        this.updateJobStatsRealTime();
-        
-        // Show results section if not already visible
-        if (this.resultsSection.style.display === 'none' && this.jobResults.length > 0) {
+
+    // FIXED: Handle real-time job updates
+    async handleJobsFound(data) {
+        console.log(`🎯 RECEIVED: ${data.jobs.length} jobs from ${data.source}`);
+
+        // Add jobs to results
+        this.jobResults.push(...data.jobs);
+        this.totalJobs = data.totalFound || this.jobResults.length;
+
+        // Show results section if first jobs
+        if (this.resultsSection.style.display === 'none') {
             this.resultsSection.style.display = 'block';
             this.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-        console.log('🎉 Real-time job search display completed!');
+
+        // FIXED: Display jobs immediately with animation
+        data.jobs.forEach((job, index) => {
+            setTimeout(() => {
+                const jobCard = this.createEnhancedJobCard(job);
+                this.jobsGrid.appendChild(jobCard);
+                
+                // Smooth animation
+                jobCard.style.opacity = '0';
+                jobCard.style.transform = 'translateY(20px)';
+                
+                requestAnimationFrame(() => {
+                    jobCard.style.transition = 'all 0.5s ease-out';
+                    jobCard.style.opacity = '1';
+                    jobCard.style.transform = 'translateY(0)';
+                });
+                
+                this.displayedJobsCount++;
+                this.updateJobStats();
+                
+            }, index * 100); // Stagger animations
+        });
+
+        // Update loading message
+        this.loadingMessage.textContent = `Found ${this.totalJobs} jobs so far from ${data.source}...`;
+        
+        // Update progress based on source completion
+        if (data.sourceProgress) {
+            this.updateProgressBar(Math.min(data.sourceProgress, 90));
+        }
+    }
+
+    // FIXED: Handle search completion
+    async handleSearchComplete(data) {
+        console.log('🏁 Search completed:', data);
+
+        this.totalJobs = data.totalJobs || this.jobResults.length;
+        
+        // Update final stats
+        this.updateJobStats();
+        
+        // Sort jobs by match percentage for better display
+        this.sortJobsByMatch();
+        
+        this.showLoading(false);
+        this.updateProgressBar(100);
+        
+        console.log(`🎉 COMPLETED: ${this.totalJobs} total jobs found!`);
+    }
+
+    // FIXED: Update job statistics in real-time
+    updateJobStats() {
+        if (this.totalJobsElement) {
+            this.totalJobsElement.textContent = this.totalJobs;
+        }
+        
+        // Calculate average match percentage
+        if (this.jobResults.length > 0) {
+            const avgMatch = Math.round(
+                this.jobResults.reduce((sum, job) => sum + (job.matchPercentage || 0), 0) / this.jobResults.length
+            );
+            if (this.matchPercentage) {
+                this.matchPercentage.textContent = `${avgMatch}%`;
+            }
+        }
+    }
+
+    // FIXED: Sort displayed jobs by match percentage
+    sortJobsByMatch() {
+        const jobCards = Array.from(this.jobsGrid.children);
+        
+        // Sort job results
+        this.jobResults.sort((a, b) => (b.matchPercentage || 0) - (a.matchPercentage || 0));
+        
+        // Re-order DOM elements to match sorted results
+        jobCards.sort((a, b) => {
+            const aMatch = parseInt(a.querySelector('.job-match')?.textContent) || 0;
+            const bMatch = parseInt(b.querySelector('.job-match')?.textContent) || 0;
+            return bMatch - aMatch;
+        });
+        
+        // Re-append in sorted order
+        jobCards.forEach(card => this.jobsGrid.appendChild(card));
     }
 
     createEnhancedJobCard(job) {
         const card = document.createElement('div');
         card.className = 'job-card';
 
-        // Enhanced match breakdown with new fields
-        let matchBreakdown = '';
-        if (job.industryMatch !== undefined || job.seniorityMatch !== undefined || job.growthPotential) {
-            matchBreakdown = `
-                <div class="match-breakdown">
-                    <div class="match-item">
-                        <span class="match-label">Overall Match:</span>
-                        <span class="match-value">${job.matchPercentage || 0}%</span>
-                    </div>
-                    ${job.industryMatch !== undefined ? `
-                    <div class="match-item">
-                        <span class="match-label">Industry Fit:</span>
-                        <span class="match-value">${job.industryMatch}%</span>
-                    </div>` : ''}
-                    ${job.seniorityMatch !== undefined ? `
-                    <div class="match-item">
-                        <span class="match-label">Level Match:</span>
-                        <span class="match-value">${job.seniorityMatch}%</span>
-                    </div>` : ''}
-                    ${job.growthPotential ? `
-                    <div class="match-item">
-                        <span class="match-label">Growth:</span>
-                        <span class="match-value growth-${job.growthPotential}">${job.growthPotential}</span>
-                    </div>` : ''}
-                </div>
-            `;
-        } else {
-            matchBreakdown = `
-                <div class="match-breakdown">
-                    <div class="match-item">
-                        <span class="match-label">Match Score:</span>
-                        <span class="match-value">${job.matchPercentage || 'Processing...'}%</span>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Enhanced skills display with categorization
-        let skillsDisplay = '';
-        
-        if (job.matchedTechnicalSkills && job.matchedTechnicalSkills.length > 0) {
-            skillsDisplay += `
-                <div class="job-skills-category">
-                    <h4><i class="fas fa-code"></i> Matched Technical Skills</h4>
-                    <div class="job-skills-list">
-                        ${job.matchedTechnicalSkills.map(skill => `<span class="job-skill technical matched">${skill}</span>`).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        if (job.matchedSoftSkills && job.matchedSoftSkills.length > 0) {
-            skillsDisplay += `
-                <div class="job-skills-category">
-                    <h4><i class="fas fa-users"></i> Matched Soft Skills</h4>
-                    <div class="job-skills-list">
-                        ${job.matchedSoftSkills.map(skill => `<span class="job-skill soft matched">${skill}</span>`).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        if (job.matchedExperience && job.matchedExperience.length > 0) {
-            skillsDisplay += `
-                <div class="job-skills-category">
-                    <h4><i class="fas fa-briefcase"></i> Matched Experience</h4>
-                    <div class="job-skills-list">
-                        ${job.matchedExperience.map(exp => `<span class="job-skill experience matched">${exp}</span>`).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        if (job.missingRequirements && job.missingRequirements.length > 0) {
-            skillsDisplay += `
-                <div class="job-skills-category missing">
-                    <h4><i class="fas fa-exclamation-triangle"></i> Missing Requirements</h4>
-                    <div class="job-skills-list">
-                        ${job.missingRequirements.map(req => `<span class="job-skill missing">${req}</span>`).join('')}
-                    </div>
-                </div>
-            `;
-        }
-
-        // Fallback to basic skills if no enhanced data
-        if (!skillsDisplay && job.skills) {
-            skillsDisplay = `
-                <div class="job-skills">
-                    ${job.skills.map(skill => `<span class="job-skill">${skill}</span>`).join('')}
-                </div>
-            `;
-        }
+        // Enhanced match display
+        const matchPercentage = job.matchPercentage || 0;
+        const matchClass = this.getMatchClass(matchPercentage);
 
         card.innerHTML = `
             <div class="job-header" onclick="this.parentElement.classList.toggle('expanded')">
@@ -690,7 +623,7 @@ class AIJobMatcher {
                     <p class="job-source"><i class="fas fa-external-link-alt"></i> Source: ${job.source || 'Unknown'}</p>
                 </div>
                 <div class="job-match-info">
-                    <span class="job-match ${this.getMatchClass(job.matchPercentage)}">${job.matchPercentage || 'Processing...'}% Match</span>
+                    <span class="job-match ${matchClass}">${matchPercentage}% Match</span>
                     <div class="expand-indicator">
                         <i class="fas fa-chevron-down"></i>
                     </div>
@@ -704,10 +637,10 @@ class AIJobMatcher {
                 </div>
                 
                 <div class="job-full-details">
-                    ${matchBreakdown}
-                    ${job.reasoning ? `<div class="job-reasoning"><strong>Why this matches:</strong> ${job.reasoning}</div>` : ''}
-                    <p class="job-description">${job.description || 'No description available'}</p>
-                    ${skillsDisplay}
+                    <div class="match-explanation">
+                        <p><strong>Match Reason:</strong> This role matches your background in ${this.getMatchReason(job)}</p>
+                    </div>
+                    <p class="job-description">${this.truncateDescription(job.description || 'No description available')}</p>
                 </div>
                 
                 <div class="job-actions">
@@ -727,11 +660,44 @@ class AIJobMatcher {
     }
 
     getMatchClass(matchPercentage) {
-        if (!matchPercentage || matchPercentage === 'Processing...') return 'medium-match';
         if (matchPercentage >= 80) return 'high-match';
+        if (matchPercentage >= 70) return 'good-match';
         if (matchPercentage >= 60) return 'medium-match';
-        if (matchPercentage >= 40) return 'low-match';
+        if (matchPercentage >= 45) return 'low-match';
         return 'very-low-match';
+    }
+
+    getMatchReason(job) {
+        const title = (job.title || '').toLowerCase();
+        const reasons = [];
+        
+        // Check technical skills
+        if (this.resumeAnalysis.technicalSkills.some(skill => 
+            title.includes(String(skill).toLowerCase())
+        )) {
+            reasons.push('technical skills');
+        }
+        
+        // Check work experience
+        if (this.resumeAnalysis.workExperience.some(exp => 
+            title.includes(String(exp).toLowerCase())
+        )) {
+            reasons.push('work experience');
+        }
+        
+        // Check industries
+        if (this.resumeAnalysis.industries.some(industry => 
+            title.includes(String(industry).toLowerCase())
+        )) {
+            reasons.push('industry experience');
+        }
+        
+        return reasons.length > 0 ? reasons.join(', ') : 'relevant background';
+    }
+
+    truncateDescription(description) {
+        if (description.length <= 300) return description;
+        return description.substring(0, 300) + '... <span class="read-more">[Click to expand]</span>';
     }
 
     clearAllFilters() {
@@ -750,7 +716,6 @@ class AIJobMatcher {
         }
     }
 
-    // Fixed applyFilters method with working salary filtering
     applyFilters() {
         if (!this.jobResults || this.jobResults.length === 0) return;
 
@@ -768,53 +733,35 @@ class AIJobMatcher {
                 
                 if (experienceFilter === 'entry') {
                     return title.includes('junior') || title.includes('entry') || title.includes('associate') || 
-                           description.includes('entry level') || description.includes('junior') ||
-                           title.includes('intern') || description.includes('0-2 years');
+                           description.includes('entry level') || description.includes('junior');
                 } else if (experienceFilter === 'mid') {
                     return !title.includes('senior') && !title.includes('lead') && !title.includes('principal') &&
-                           !title.includes('junior') && !title.includes('entry') && !title.includes('director') &&
-                           (description.includes('2-5 years') || description.includes('3-6 years') || 
-                            (!description.includes('senior') && !description.includes('lead')));
+                           !title.includes('junior') && !title.includes('entry') && !title.includes('director');
                 } else if (experienceFilter === 'senior') {
                     return title.includes('senior') || title.includes('lead') || title.includes('principal') ||
-                           description.includes('senior') || description.includes('5+ years') || 
-                           description.includes('6+ years') || description.includes('7+ years');
+                           description.includes('senior') || description.includes('5+ years');
                 } else if (experienceFilter === 'lead') {
                     return title.includes('lead') || title.includes('manager') || title.includes('principal') || 
-                           title.includes('architect') || title.includes('director') || title.includes('head of') ||
-                           description.includes('leadership') || description.includes('management');
+                           title.includes('architect') || title.includes('director') || title.includes('head of');
                 }
                 return true;
             });
         }
 
-        // Apply salary filter - FIXED IMPLEMENTATION
+        // Apply salary filter
         if (salaryFilter) {
             filteredJobs = filteredJobs.filter(job => {
                 const salary = job.salary || '';
-                if (salary === 'Salary not specified' || salary === '' || salary === 'Not specified') {
-                    return false; // Exclude jobs without salary info when filtering by salary
-                }
+                if (salary === 'Salary not specified') return false;
                 
-                const salaryText = salary.toLowerCase();
                 const salaryNumbers = this.extractSalaryNumbers(salary);
                 
-                if (salaryFilter === '50k') {
-                    // $50k+
-                    return salaryNumbers.min >= 50000 || salaryNumbers.max >= 50000;
-                } else if (salaryFilter === '75k') {
-                    // $75k+
-                    return salaryNumbers.min >= 75000 || salaryNumbers.max >= 75000;
-                } else if (salaryFilter === '100k') {
-                    // $100k+
-                    return salaryNumbers.min >= 100000 || salaryNumbers.max >= 100000;
-                } else if (salaryFilter === '125k') {
-                    // $125k+
-                    return salaryNumbers.min >= 125000 || salaryNumbers.max >= 125000;
-                } else if (salaryFilter === '150k') {
-                    // $150k+
-                    return salaryNumbers.min >= 150000 || salaryNumbers.max >= 150000;
-                }
+                if (salaryFilter === '50k') return salaryNumbers.min >= 50000 || salaryNumbers.max >= 50000;
+                if (salaryFilter === '75k') return salaryNumbers.min >= 75000 || salaryNumbers.max >= 75000;
+                if (salaryFilter === '100k') return salaryNumbers.min >= 100000 || salaryNumbers.max >= 100000;
+                if (salaryFilter === '125k') return salaryNumbers.min >= 125000 || salaryNumbers.max >= 125000;
+                if (salaryFilter === '150k') return salaryNumbers.min >= 150000 || salaryNumbers.max >= 150000;
+                
                 return true;
             });
         }
@@ -823,24 +770,17 @@ class AIJobMatcher {
         if (timezoneFilter) {
             filteredJobs = filteredJobs.filter(job => {
                 const description = (job.description || '').toLowerCase();
-                const title = job.title.toLowerCase();
                 const location = (job.location || '').toLowerCase();
                 
                 if (timezoneFilter === 'us-only') {
-                    return description.includes('us') || description.includes('united states') || 
-                           description.includes('usa') || location.includes('us') || 
-                           description.includes('est') || description.includes('pst') || 
-                           description.includes('cst') || description.includes('mst') ||
-                           description.includes('eastern') || description.includes('pacific') ||
-                           description.includes('central') || description.includes('mountain');
+                    return description.includes('us') || location.includes('us') || 
+                           description.includes('est') || description.includes('pst');
                 } else if (timezoneFilter === 'global') {
                     return description.includes('global') || description.includes('worldwide') || 
-                           description.includes('international') || description.includes('any timezone') ||
-                           description.includes('flexible timezone');
+                           description.includes('any timezone');
                 } else if (timezoneFilter === 'europe') {
-                    return description.includes('europe') || description.includes('eu') || 
-                           description.includes('cet') || description.includes('gmt') ||
-                           description.includes('utc') || location.includes('europe');
+                    return description.includes('europe') || description.includes('cet') || 
+                           description.includes('gmt');
                 }
                 return true;
             });
@@ -851,7 +791,7 @@ class AIJobMatcher {
         
         // Show/hide clear filters button
         if (this.clearFilters) {
-            const hasFilters = this.experienceFilter.value || this.salaryFilter.value || this.timezoneFilter.value;
+            const hasFilters = experienceFilter || salaryFilter || timezoneFilter;
             this.clearFilters.style.display = hasFilters ? 'inline-flex' : 'none';
         }
     }
@@ -861,27 +801,19 @@ class AIJobMatcher {
         this.totalJobsElement.textContent = filteredJobs.length;
         this.jobsGrid.innerHTML = '';
 
-        const initialJobs = filteredJobs.slice(0, 12);
-        initialJobs.forEach(job => {
+        filteredJobs.forEach(job => {
             const jobCard = this.createEnhancedJobCard(job);
             this.jobsGrid.appendChild(jobCard);
         });
 
-        this.displayedJobsCount = initialJobs.length;
+        this.displayedJobsCount = filteredJobs.length;
 
-        const avgMatch = initialJobs.length > 0
-            ? Math.round(initialJobs.reduce((sum, job) => sum + (job.matchPercentage || 0), 0) / initialJobs.length)
+        const avgMatch = filteredJobs.length > 0
+            ? Math.round(filteredJobs.reduce((sum, job) => sum + (job.matchPercentage || 0), 0) / filteredJobs.length)
             : 0;
         this.matchPercentage.textContent = `${avgMatch}%`;
-
-        if (filteredJobs.length > 12) {
-            this.loadMore.style.display = 'block';
-        } else {
-            this.loadMore.style.display = 'none';
-        }
     }
 
-    // Enhanced updateFilterChips method to show filter values more clearly
     updateFilterChips() {
         this.filterChips.innerHTML = '';
 
@@ -896,7 +828,7 @@ class AIJobMatcher {
                 'senior': 'Senior Level',
                 'lead': 'Lead/Management'
             };
-            this.addFilterChip('Experience', expLabels[experienceFilter] || experienceFilter, () => {
+            this.addFilterChip('Experience', expLabels[experienceFilter], () => {
                 this.experienceFilter.value = '';
                 this.applyFilters();
             });
@@ -910,7 +842,7 @@ class AIJobMatcher {
                 '125k': '$125k+',
                 '150k': '$150k+'
             };
-            this.addFilterChip('Salary', salaryLabels[salaryFilter] || salaryFilter, () => {
+            this.addFilterChip('Salary', salaryLabels[salaryFilter], () => {
                 this.salaryFilter.value = '';
                 this.applyFilters();
             });
@@ -922,62 +854,11 @@ class AIJobMatcher {
                 'global': 'Global/Any Timezone',
                 'europe': 'Europe/EU'
             };
-            this.addFilterChip('Timezone', timezoneLabels[timezoneFilter] || timezoneFilter, () => {
+            this.addFilterChip('Timezone', timezoneLabels[timezoneFilter], () => {
                 this.timezoneFilter.value = '';
                 this.applyFilters();
             });
         }
-    }
-
-    // Helper method to extract salary numbers from salary strings
-    extractSalaryNumbers(salaryStr) {
-        const salary = salaryStr.toLowerCase();
-        let min = 0, max = 0;
-        
-        // Remove common currency symbols and text
-        const cleanSalary = salary.replace(/[$£€,]/g, '');
-        
-        // Look for salary patterns
-        const rangeMatch = cleanSalary.match(/(\d+)(?:k|,000)?\s*[-–to]\s*(\d+)(?:k|,000)?/);
-        const singleMatch = cleanSalary.match(/(\d+)(?:k|,000)?/);
-        const fromMatch = cleanSalary.match(/from\s+(\d+)(?:k|,000)?/);
-        const upToMatch = cleanSalary.match(/up\s+to\s+(\d+)(?:k|,000)?/);
-        
-        if (rangeMatch) {
-            // Range: "50k - 75k" or "50,000 - 75,000"
-            min = parseInt(rangeMatch[1]);
-            max = parseInt(rangeMatch[2]);
-            
-            // Handle k notation
-            if (salary.includes('k') || min < 1000) {
-                min *= 1000;
-                max *= 1000;
-            }
-        } else if (fromMatch) {
-            // "From 50k"
-            min = parseInt(fromMatch[1]);
-            if (salary.includes('k') || min < 1000) {
-                min *= 1000;
-            }
-            max = min; // Use same value for comparison
-        } else if (upToMatch) {
-            // "Up to 75k"
-            max = parseInt(upToMatch[1]);
-            if (salary.includes('k') || max < 1000) {
-                max *= 1000;
-            }
-            min = max; // Use same value for comparison
-        } else if (singleMatch) {
-            // Single number "50k" or "50000"
-            const num = parseInt(singleMatch[1]);
-            if (salary.includes('k') || num < 1000) {
-                min = max = num * 1000;
-            } else {
-                min = max = num;
-            }
-        }
-        
-        return { min, max };
     }
 
     addFilterChip(label, value, onRemove) {
@@ -997,31 +878,32 @@ class AIJobMatcher {
         this.filterChips.appendChild(chip);
     }
 
+    extractSalaryNumbers(salaryStr) {
+        const salary = salaryStr.toLowerCase();
+        let min = 0, max = 0;
+        
+        const cleanSalary = salary.replace(/[$£€,]/g, '');
+        const rangeMatch = cleanSalary.match(/(\d+)(?:k|,000)?\s*[-–to]\s*(\d+)(?:k|,000)?/);
+        const singleMatch = cleanSalary.match(/(\d+)(?:k|,000)?/);
+        
+        if (rangeMatch) {
+            min = parseInt(rangeMatch[1]);
+            max = parseInt(rangeMatch[2]);
+            if (salary.includes('k') || min < 1000) {
+                min *= 1000;
+                max *= 1000;
+            }
+        } else if (singleMatch) {
+            const num = parseInt(singleMatch[1]);
+            min = max = salary.includes('k') || num < 1000 ? num * 1000 : num;
+        }
+        
+        return { min, max };
+    }
+
     loadMoreJobs() {
-        // Load from remaining jobs if they exist, otherwise from filtered results
-        let jobsToLoadFrom = [];
-        if (this.remainingJobs && this.remainingJobs.length > 0) {
-            jobsToLoadFrom = this.remainingJobs.splice(0, 12); // Take 12 from remaining
-        } else {
-            const jobsToUse = this.currentFilteredJobs.length > 0 ? this.currentFilteredJobs : this.jobResults;
-            jobsToLoadFrom = jobsToUse.slice(this.displayedJobsCount, this.displayedJobsCount + 12);
-        }
-
-        jobsToLoadFrom.forEach(job => {
-            const jobCard = this.createEnhancedJobCard(job);
-            this.jobsGrid.appendChild(jobCard);
-        });
-
-        this.displayedJobsCount += jobsToLoadFrom.length;
-
-        // Hide load more if no more jobs
-        const hasMoreJobs = (this.remainingJobs && this.remainingJobs.length > 0) ||
-                           (this.currentFilteredJobs.length > this.displayedJobsCount) ||
-                           (this.jobResults.length > this.displayedJobsCount);
-
-        if (!hasMoreJobs) {
-            this.loadMore.style.display = 'none';
-        }
+        // This function can be enhanced later for pagination
+        console.log('Load more jobs functionality');
     }
 
     showLoading(show, message = '') {
