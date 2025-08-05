@@ -6,17 +6,16 @@
     <title>AI Job Matcher - Find Your Perfect Role</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="index.css">
-    
+    <link rel="stylesheet" href="./index.css">
 </head>
 <body>
     <!-- Landing Page -->
     <div class="landing-page" id="landingPage">
         <div class="floating-shapes">
-            <i class="fas fa-briefcase shape" style="font-size: 3rem;"></i>
-            <i class="fas fa-robot shape" style="font-size: 2.5rem;"></i>
-            <i class="fas fa-chart-line shape" style="font-size: 2rem;"></i>
-            <i class="fas fa-user-tie shape" style="font-size: 2.8rem;"></i>
+            <i class="fas fa-briefcase shape"></i>
+            <i class="fas fa-robot shape"></i>
+            <i class="fas fa-chart-line shape"></i>
+            <i class="fas fa-user-tie shape"></i>
         </div>
         
         <div class="landing-content">
@@ -28,37 +27,38 @@
             <p class="hero-subtitle">Revolutionary AI-powered platform that analyzes your resume and finds perfect remote job matches in seconds</p>
             
             <div class="hero-features">
-    <div class="feature-item">
-        <div class="feature-icon">
-            <i class="fas fa-magic"></i>
-        </div>
-        <h3 class="feature-title">AI Resume Analysis</h3>
-        <p class="feature-desc">Advanced GPT-4 powered analysis extracts skills, experience, and qualifications</p>
-    </div>
-    
-    <div class="feature-item">
-        <div class="feature-icon">
-            <i class="fas fa-search"></i>
-        </div>
-        <h3 class="feature-title">Smart Job Matching</h3>
-        <p class="feature-desc">Intelligent algorithms find roles that match your expertise and career goals</p>
-    </div>
-    
-    <div class="feature-item">
-        <div class="feature-icon">
-            <i class="fas fa-home"></i>
-        </div>
-        <h3 class="feature-title">Remote Only</h3>
-        <p class="feature-desc">Exclusively curated remote opportunities from top companies worldwide</p>
-    </div>
-    <div class="feature-item">
-        <div class="feature-icon">
-            <i class="fas fa-chart-line"></i>
-        </div>
-        <h3 class="feature-title">Real-Time Matching</h3>
-        <p class="feature-desc">Instant results with live progress tracking and detailed match percentages</p>
-    </div>
-</div>
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <i class="fas fa-magic"></i>
+                    </div>
+                    <h3 class="feature-title">AI Resume Analysis</h3>
+                    <p class="feature-desc">Advanced GPT-4 powered analysis extracts skills, experience, and qualifications</p>
+                </div>
+                
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <h3 class="feature-title">Smart Job Matching</h3>
+                    <p class="feature-desc">Intelligent algorithms find roles that match your expertise and career goals</p>
+                </div>
+                
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <i class="fas fa-home"></i>
+                    </div>
+                    <h3 class="feature-title">Remote Only</h3>
+                    <p class="feature-desc">Exclusively curated remote opportunities from top companies worldwide</p>
+                </div>
+                
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h3 class="feature-title">Real-Time Matching</h3>
+                    <p class="feature-desc">Instant results with live progress tracking and detailed match percentages</p>
+                </div>
+            </div>
             
             <div class="stats-container">
                 <div class="stat-item">
@@ -101,8 +101,8 @@
             <!-- Main Content -->
             <main class="main-content">
                 <!-- Resume Upload Section -->
-                <div class="upload-section">
-                    <div class="upload-card">
+                <section class="upload-section">
+                    <div class="card upload-card">
                         <div class="upload-icon">
                             <i class="fas fa-file-upload"></i>
                         </div>
@@ -133,21 +133,20 @@
                             Analyze Resume & Find Jobs
                         </button>
                     </div>
-                </div>
+                </section>
 
-                <!-- All other sections from original HTML -->
                 <!-- Resume Analysis Section -->
-                <div class="analysis-section" id="analysis-section">
-                    <div class="analysis-content">
-                        <h2>Resume Analysis Results</h2>
+                <section class="analysis-section" id="analysis-section">
+                    <div class="card analysis-card">
+                        <h2><i class="fas fa-chart-bar"></i> Resume Analysis Results</h2>
                         <div class="skills-grid" id="skills-grid"></div>
                     </div>
-                </div>
+                </section>
 
                 <!-- Job Search Section -->
-                <div class="search-section" id="search-section">
-                    <div class="search-content">
-                        <h2>Refine Your Job Search</h2>
+                <section class="search-section" id="search-section">
+                    <div class="card search-card">
+                        <h2><i class="fas fa-filter"></i> Refine Your Job Search</h2>
                         <div class="filters">
                             <div class="filter-group">
                                 <label for="experience-filter">Experience Level:</label>
@@ -185,52 +184,62 @@
                             Start Job Search
                         </button>
                     </div>
-                </div>
+                </section>
 
                 <!-- Loading Section -->
-                <div class="loading-section" id="loading-section">
-                    <div class="loading-content">
+                <section class="loading-section" id="loading-section">
+                    <div class="card loading-card">
                         <div class="spinner"></div>
+                        <h3>Searching for Perfect Matches</h3>
                         <p id="loading-message">Processing...</p>
                         <div class="progress-bar">
                             <div class="progress-fill" id="progress-fill"></div>
                         </div>
                     </div>
-                </div>
+                </section>
 
                 <!-- Results Section -->
-                <div class="results-section" id="results-section">
+                <section class="results-section" id="results-section">
                     <div class="results-header">
-                        <h2>Job Matches Found</h2>
+                        <h2><i class="fas fa-trophy"></i> Job Matches Found</h2>
                         <div class="results-stats">
                             <span>Total Jobs: <span id="total-jobs">0</span></span>
                             <span>Average Match: <span id="match-percentage">0%</span></span>
                         </div>
-                        <div class="filter-chips" id="filter-chips"></div>
-                        <button class="clear-filters" id="clear-filters">Clear Filters</button>
+                        <div class="filters-bar">
+                            <div class="filter-chips" id="filter-chips"></div>
+                            <button class="clear-filters" id="clear-filters" style="display: none;">
+                                <i class="fas fa-times"></i>
+                                Clear Filters
+                            </button>
+                        </div>
                     </div>
                     <div class="jobs-grid" id="jobs-grid"></div>
-                    <button class="load-more" id="load-more" style="display: none;">Load More Jobs</button>
-                </div>
+                    <button class="load-more" id="load-more" style="display: none;">
+                        <i class="fas fa-plus"></i>
+                        Load More Jobs
+                    </button>
+                </section>
 
                 <!-- Error Section -->
-                <div class="error-section" id="error-section">
+                <section class="error-section" id="error-section">
                     <div class="error-content">
                         <i class="fas fa-exclamation-triangle"></i>
+                        <h3>Oops! Something went wrong</h3>
                         <p id="error-message">An error occurred. Please try again.</p>
                     </div>
-                </div>
+                </section>
             </main>
 
             <!-- Footer -->
-            <footer style="text-align: center; padding: 2rem 0;">
+            <footer class="footer">
                 <p>&copy; 2025 AI Job Matcher. Powered by OpenAI GPT-4 & Multiple Job APIs</p>
                 <p>Conceptualized, designed, engineered, tested, and deployed by Software/ML Engineer, Tammy Hartline</p>
             </footer>
         </div>
     </div>
 
-    <script src="/frontend.js"></script>
+    <script src="./frontend.js"></script>
 
     <script>
         // Counter Animation
@@ -271,22 +280,10 @@
                 landingPage.style.display = 'none';
                 mainApp.style.display = 'block';
                 mainApp.classList.add('fade-in');
-                
-                // Initialize the main app functionality here
-                initializeApp();
             }, 800);
         }
 
-        // Initialize main app functionality
-        function initializeApp() {
-            // Add your existing frontend.js functionality here
-            // This would include all the file upload, resume analysis, and job search logic
-            console.log('Main app initialized');
-            
-            // The frontend.js is already loaded, no need to load it again
-        }
-
-        // Add some interactive hover effects
+        // Add interactive hover effects for landing page
         document.addEventListener('mousemove', (e) => {
             const shapes = document.querySelectorAll('.shape');
             shapes.forEach((shape, index) => {
@@ -297,7 +294,7 @@
             });
         });
 
-        // Smooth scrolling for any internal links
+        // Smooth scrolling for internal links
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function (e) {
                 e.preventDefault();

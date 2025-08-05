@@ -617,7 +617,6 @@
   }
   
   .upload-card {
-    @extend .card;
     text-align: center;
   }
   
@@ -851,10 +850,6 @@
     margin-bottom: var(--spacing-12);
   }
   
-  .analysis-card {
-    @extend .card;
-  }
-  
   .analysis-card h2 {
     text-align: center;
     margin-bottom: var(--spacing-8);
@@ -1008,10 +1003,6 @@
     margin-bottom: var(--spacing-12);
   }
   
-  .search-card {
-    @extend .card;
-  }
-  
   .search-card h2 {
     text-align: center;
     margin-bottom: var(--spacing-8);
@@ -1078,7 +1069,6 @@
   }
   
   .loading-card {
-    @extend .card;
     text-align: center;
   }
   

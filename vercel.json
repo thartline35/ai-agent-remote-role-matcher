@@ -13,15 +13,35 @@
     },
     {
       "src": "/index.css",
-      "dest": "/index.css"
+      "dest": "/index.css",
+      "headers": {
+        "Content-Type": "text/css; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000"
+      }
     },
     {
       "src": "/frontend.js",
-      "dest": "/frontend.js"
+      "dest": "/frontend.js",
+      "headers": {
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=31536000"
+      }
+    },
+    {
+      "src": "/",
+      "dest": "/index.html",
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8"
+      }
     },
     {
       "src": "/(.*)",
       "dest": "/index.js"
     }
-  ]
+  ],
+  "functions": {
+    "api/*.js": {
+      "maxDuration": 300
+    }
+  }
 }
