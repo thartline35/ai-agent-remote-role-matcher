@@ -309,6 +309,12 @@ function extractEnhancedSkillsFromText(resumeText) {
 // Enhanced job scraping function - SEQUENTIAL PROCESSING WITH 70% THRESHOLD
 export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
     console.log('=== STARTING RESUME-DRIVEN JOB SEARCH ===');
+    
+    // Set a timeout for the entire job search process
+    const searchTimeout = setTimeout(() => {
+        console.error('❌ Job search timed out after 60 seconds');
+        throw new Error('Job search timed out. Please try again.');
+    }, 60000);
     console.log('Resume Analysis Summary:');
     console.log('- Technical Skills:', analysis.technicalSkills?.slice(0, 10) || []);
     console.log('- Work Experience:', analysis.workExperience?.slice(0, 5).map(exp => {
@@ -373,7 +379,7 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
                 }
 
                 // Rate limiting between queries (reduced for faster processing)
-                await new Promise(resolve => setTimeout(resolve, 500));
+                await new Promise(resolve => setTimeout(resolve, 200));
             }
 
             if (sourceResults.length > 0) {
@@ -408,7 +414,7 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
             }
 
             // Rate limiting between sources (reduced for faster processing)
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 500));
         }
 
         console.log(`\n📊 === FINAL PROCESSING ===`);
@@ -425,6 +431,9 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
         console.log(`Returning ${sortedJobs.length} quality matches from all sources`);
         console.log(`Top matches: ${sortedJobs.slice(0, 3).map(job => `${job.title} (${job.matchPercentage}%)`).join(' | ')}`);
 
+        // Clear the timeout since we completed successfully
+        clearTimeout(searchTimeout);
+        
         // Return with pagination - only quality matches
         return {
             initialJobs: sortedJobs.slice(0, 12), // First 12 for immediate display
@@ -433,6 +442,8 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
         };
 
     } catch (error) {
+        // Clear the timeout on error
+        clearTimeout(searchTimeout);
         console.error('❌ Job search error:', error);
         throw error;
     }
@@ -867,27 +878,26 @@ async function searchTheirstackJobs(query, filters) {
     try {
         console.log('🔍 Theirstack: Making API request...');
         
-        const response = await axios.get('https://api.theirstack.com/v1/jobs/search', {
+        const response = await axios.get('https://api.theirstack.com/v1/jobs', {
             params: {
-                q: query,
+                query: query,
                 remote: true,
-                limit: 50,
-                sort: 'relevance'
+                limit: 50
             },
             headers: {
                 'Authorization': `Bearer ${THEIRSTACK_API_KEY}`,
                 'Content-Type': 'application/json'
             },
-            timeout: 15000
+            timeout: 10000
         });
 
-        console.log(`✅ Theirstack API responded with ${response.data?.jobs?.length || 0} jobs`);
+        console.log(`✅ Theirstack API responded with ${response.data?.data?.length || 0} jobs`);
 
-        if (!response.data?.jobs) {
+        if (!response.data?.data) {
             return [];
         }
 
-        return response.data.jobs.map(job => {
+        return response.data.data.map(job => {
             // Enhanced salary handling
             let salary = formatSalary(job.salary_min, job.salary_max);
             if (salary === 'Salary not specified') {
@@ -909,6 +919,10 @@ async function searchTheirstackJobs(query, filters) {
         
     } catch (error) {
         console.error('❌ Theirstack error:', error.message);
+        if (error.response) {
+            console.error('Response status:', error.response.status);
+            console.error('Response data:', error.response.data);
+        }
         return [];
     }
 }
