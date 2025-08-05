@@ -383,31 +383,22 @@ class AIJobMatcher {
         try {
             this.showLoading(true, 'Searching for remote jobs matching your profile...');
             this.hideError();
-
+    
+            // FIXED: Clear previous results and UI for new search
             this.jobResults = [];
             this.remainingJobs = [];
             this.totalJobs = 0;
             this.displayedJobsCount = 0;
-
+            this.jobsGrid.innerHTML = ''; // Clear existing job cards
+            this.resultsSection.style.display = 'none'; // Hide results section
+    
             const filters = this.getSearchFilters();
-
-            // Set timeout for job search (3 minutes to match server timeout)
-            const timeoutId = setTimeout(() => {
-                if (this.loadingSection.style.display === 'block') {
-                    this.showError('Job search is taking longer than expected. Please try again.');
-                    this.showLoading(false);
-                }
-            }, 180000); // 3 minutes timeout (matches server timeout)
-
-            const clearTimeoutOnComplete = () => {
-                clearTimeout(timeoutId);
-            };
-
-            console.log('Starting enhanced job search...');
+    
+            console.log('🚀 Starting enhanced job search with streaming...');
             console.log('Enhanced analysis data:', this.resumeAnalysis);
             console.log('Search filters:', filters);
             
-            // Use fetch with streaming for real-time updates
+            // FIXED: Start the streaming request
             const response = await fetch('/api/search-jobs', {
                 method: 'POST',
                 headers: {
@@ -419,159 +410,179 @@ class AIJobMatcher {
                 })
             });
             
-            console.log('Job search response received:', response.status, response.statusText);
-
+            console.log('📡 Job search response received:', response.status, response.statusText);
+    
             if (!response.ok) {
-                clearTimeoutOnComplete();
                 const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }));
                 throw new Error(errorData.error || `Server error (${response.status})`);
             }
-
-            // Set up streaming response handling
+    
+            // FIXED: Set up streaming response handling
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
-
-            console.log('Reading streaming job search results...');
-
+    
+            console.log('📖 Reading streaming job search results...');
+    
+            let buffer = ''; // Buffer for incomplete chunks
+    
             try {
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) {
-                        console.log('Job search stream completed');
+                        console.log('✅ Job search stream completed');
                         break;
                     }
-
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n');
-
+    
+                    // FIXED: Handle partial chunks properly
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    
+                    // Keep the last incomplete line in the buffer
+                    buffer = lines.pop() || '';
+    
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
-                            let jsonStr = '';  // <-- MOVED OUTSIDE try block
                             try {
-                                jsonStr = line.slice(6).trim();
+                                const jsonStr = line.slice(6).trim();
                                 if (!jsonStr) continue;
                                 
-                                // Skip malformed JSON
-                                if (!jsonStr.startsWith('{') || (!jsonStr.endsWith('}') && !jsonStr.endsWith('}}'))) {
-                                    console.warn('Skipping malformed JSON');
-                                    continue;
-                                }
-                                
                                 const data = JSON.parse(jsonStr);
-                                console.log('Received job search data:', data.type, data);
+                                console.log('📨 Received streaming data:', data.type, data);
                     
+                                // FIXED: Handle different streaming events
                                 switch (data.type) {
-                                    case 'jobs_found':
-                                        console.log(`Received ${data.jobs.length} jobs from ${data.source}`);
-                                        this.jobResults.push(...data.jobs);
-                                        this.loadingMessage.textContent = `Found ${data.totalFound} remote jobs from ${data.source}...`;
-                                        this.updateProgressBar(30 + (this.jobResults.length / 50) * 40);
-                                        this.displayJobResults();
+                                    case 'search_started':
+                                        this.loadingMessage.textContent = data.message;
+                                        this.updateProgressBar(10);
                                         break;
-                    
-                                    case 'search_complete':
-                                        console.log('Job search completed:', data);
-                                        if (data.initialJobs && data.remainingJobs !== undefined) {
-                                            this.jobResults = data.initialJobs;
-                                            this.remainingJobs = data.remainingJobs;
-                                            this.totalJobs = data.totalJobs;
-                                        } else {
-                                            this.jobResults = data.jobs || this.jobResults;
-                                            this.remainingJobs = [];
-                                            this.totalJobs = this.jobResults.length;
+    
+                                    case 'jobs_found':
+                                        console.log(`🎯 REAL-TIME: Received ${data.jobs.length} jobs from ${data.source}`);
+                                        
+                                        // FIXED: Stream individual jobs immediately
+                                        data.jobs.forEach(job => {
+                                            // Add job immediately to results
+                                            this.jobResults.push(job);
+                                            
+                                            // FIXED: Create and display job card immediately
+                                            const jobCard = this.createEnhancedJobCard(job);
+                                            this.jobsGrid.appendChild(jobCard);
+                                            
+                                            // Add smooth animation for new job
+                                            jobCard.style.opacity = '0';
+                                            jobCard.style.transform = 'translateY(20px)';
+                                            
+                                            setTimeout(() => {
+                                                jobCard.style.transition = 'all 0.5s ease-out';
+                                                jobCard.style.opacity = '1';
+                                                jobCard.style.transform = 'translateY(0)';
+                                            }, 100);
+                                        });
+                                        
+                                        // FIXED: Update UI stats immediately
+                                        this.updateJobStatsRealTime();
+                                        
+                                        // FIXED: Show results section if first job
+                                        if (this.resultsSection.style.display === 'none' && this.jobResults.length > 0) {
+                                            this.resultsSection.style.display = 'block';
+                                            this.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
                                         }
-                                        this.displayJobResults();
+                                        
+                                        // Update loading message
+                                        this.loadingMessage.textContent = `Found ${this.jobResults.length} matches so far from ${data.source}...`;
+                                        this.updateProgressBar(20 + (this.jobResults.length / 50) * 60);
+                                        break;
+            
+                                    case 'search_complete':
+                                        console.log('🏁 Job search completed:', data);
+                                        
+                                        // FIXED: Jobs are already displayed, just handle final cleanup
+                                        this.remainingJobs = data.remainingJobs || [];
+                                        this.totalJobs = data.totalJobs || this.jobResults.length;
+                                        
+                                        // FIXED: Final stats update
+                                        this.updateJobStatsRealTime();
+                                        
+                                        // Show load more button if needed
+                                        if (this.remainingJobs && this.remainingJobs.length > 0) {
+                                            this.loadMore.style.display = 'block';
+                                        } else {
+                                            this.loadMore.style.display = 'none';
+                                        }
+                                        
                                         this.showLoading(false);
-                                        clearTimeoutOnComplete();
+                                        console.log('🎉 Real-time streaming completed!');
                                         return;
-                    
+            
                                     case 'error':
+                                        console.error('❌ Streaming error:', data.error);
                                         this.showError(data.error);
                                         this.showLoading(false);
-                                        clearTimeoutOnComplete();
                                         return;
                                 }
                             } catch (parseError) {
-                                console.warn('Skipping problematic JSON chunk:', parseError.message);
-                                continue;  // <-- CONTINUE instead of logging the error
+                                console.warn('⚠️ Failed to parse streaming data:', line, parseError.message);
+                                continue;
                             }
                         }
                     }
                 }
             } catch (streamError) {
-                console.error('Stream reading error:', streamError);
+                console.error('❌ Stream reading error:', streamError);
                 throw new Error('Failed to read job search results stream');
             } finally {
                 reader.releaseLock();
             }
-
+    
         } catch (error) {
-            console.error('Job search error:', error);
-
-            if (typeof clearTimeoutOnComplete === 'function') {
-                clearTimeoutOnComplete();
-            }
-
+            console.error('❌ Job search error:', error);
+    
             let userMessage = 'Failed to search for jobs. Please try again.';
-
+    
             if (error.name === 'AbortError') {
-                userMessage = 'Request timed out. Please try again with different search criteria.';
-            } else if (error.message.includes('No jobs found') || error.message.includes('No remote jobs found')) {
-                userMessage = error.message + ' Try updating your resume or broadening your search criteria.';
+                userMessage = 'Request timed out. Please try again.';
+            } else if (error.message.includes('No jobs found')) {
+                userMessage = error.message;
             } else if (error.message.includes('API')) {
                 userMessage = 'API service issue. Please try again in a few minutes.';
-            } else if (error.message.includes('network') || error.message.includes('fetch')) {
-                userMessage = 'Network connection issue. Please check your internet connection.';
             }
-
+    
             this.showError(userMessage);
             this.showLoading(false);
             this.addRetryButton();
         }
     }
-
-    updateProgressBar(percentage) {
-        this.progressFill.style.width = `${Math.min(percentage, 100)}%`;
-    }
-
-    getSearchFilters() {
-        return {
-            experience: this.experienceFilter.value,
-            salary: this.salaryFilter.value,
-            timezone: this.timezoneFilter.value
-        };
-    }
-
-    displayJobResults() {
-        console.log(`Displaying ${this.jobResults.length} remote jobs`);
+    
+    // FIXED: New function for real-time stats updates
+    updateJobStatsRealTime() {
+        // Update job count
         this.totalJobsElement.textContent = this.jobResults.length;
-
-        // Calculate average match percentage
+        
+        // Calculate and update average match percentage in real-time
         const avgMatch = this.jobResults.length > 0
             ? Math.round(this.jobResults.reduce((sum, job) => sum + (job.matchPercentage || 0), 0) / this.jobResults.length)
             : 0;
         this.matchPercentage.textContent = `${avgMatch}%`;
-
-        this.jobsGrid.innerHTML = '';
-
-        // Show all jobs as they come in
-        this.jobResults.forEach(job => {
-            const jobCard = this.createEnhancedJobCard(job);
-            this.jobsGrid.appendChild(jobCard);
-        });
-
+        
         this.displayedJobsCount = this.jobResults.length;
-        this.currentFilteredJobs = [];
-
-        this.resultsSection.style.display = 'block';
-        this.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-        // Show load more if we have remaining jobs
-        if (this.remainingJobs && this.remainingJobs.length > 0) {
-            this.loadMore.style.display = 'block';
-        } else {
-            this.loadMore.style.display = 'none';
+        
+        console.log(`📊 Updated stats: ${this.jobResults.length} jobs, ${avgMatch}% avg match`);
+    }
+    
+    // FIXED: Simplified real-time job display (now handled in streaming)
+    displayJobResultsRealTime() {
+        // This function is now mainly used for final cleanup
+        console.log(`📺 Final display check: ${this.jobResults.length} jobs total`);
+        
+        // Ensure all stats are up to date
+        this.updateJobStatsRealTime();
+        
+        // Show results section if not already visible
+        if (this.resultsSection.style.display === 'none' && this.jobResults.length > 0) {
+            this.resultsSection.style.display = 'block';
+            this.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
+        console.log('🎉 Real-time job search display completed!');
     }
 
     createEnhancedJobCard(job) {
