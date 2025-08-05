@@ -307,6 +307,7 @@ function extractEnhancedSkillsFromText(resumeText) {
 }
 
 // Enhanced job scraping function - SEQUENTIAL PROCESSING WITH 70% THRESHOLD
+// FIXED: Enhanced job scraping function - MULTIPLE ISSUES RESOLVED
 export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
     console.log('=== STARTING RESUME-DRIVEN JOB SEARCH ===');
     
@@ -315,6 +316,7 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
         console.error('❌ Job search timed out after 60 seconds');
         throw new Error('Job search timed out. Please try again.');
     }, 60000);
+    
     console.log('Resume Analysis Summary:');
     console.log('- Technical Skills:', analysis.technicalSkills?.slice(0, 10) || []);
     console.log('- Work Experience:', analysis.workExperience?.slice(0, 5).map(exp => {
@@ -335,7 +337,7 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
         const finalResults = [];
         const processedJobs = new Set(); // Track duplicates across all sources
 
-        // Process each source SEQUENTIALLY with 70% threshold filtering
+        // FIXED: Process each source SEQUENTIALLY with proper error handling
         const sources = [
             { name: 'Theirstack', func: searchTheirstackJobs },
             { name: 'Adzuna', func: searchAdzunaJobs },
@@ -351,8 +353,8 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
             
             const sourceResults = [];
             
-            // Process first 3 queries for this source
-            for (let i = 0; i < Math.min(queries.length, 3); i++) {
+            // FIXED: Process MORE queries per source (was 3, now 5)
+            for (let i = 0; i < Math.min(queries.length, 5); i++) {
                 const query = queries[i];
                 console.log(`   Query ${i + 1}: "${query}"`);
 
@@ -362,8 +364,8 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
                     if (jobs.length > 0) {
                         console.log(`   Raw jobs found: ${jobs.length}`);
                         
-                        // Filter for remote jobs immediately
-                        const remoteJobs = jobs.filter(job => isRemoteJob(job));
+                        // FIXED: More lenient remote job filtering
+                        const remoteJobs = jobs.filter(job => isRemoteJobFixed(job));
                         console.log(`   Remote jobs: ${remoteJobs.length}`);
                         
                         // Apply additional filters (salary, experience, timezone)
@@ -376,10 +378,12 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
                     }
                 } catch (error) {
                     console.error(`   ❌ ${source.name} failed for "${query}":`, error.message);
+                    // FIXED: Don't fail entire search if one API fails
+                    continue;
                 }
 
-                // Rate limiting between queries (reduced for faster processing)
-                await new Promise(resolve => setTimeout(resolve, 200));
+                // Rate limiting between queries
+                await new Promise(resolve => setTimeout(resolve, 300));
             }
 
             if (sourceResults.length > 0) {
@@ -389,12 +393,11 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
                 const uniqueSourceJobs = removeDuplicateJobs(sourceResults);
                 console.log(`   After deduplication: ${uniqueSourceJobs.length}`);
                 
-                // FILTER FOR 70%+ MATCHES IMMEDIATELY (maintains user-requested threshold)
-                const highMatchJobs = await filterHighMatchJobs(uniqueSourceJobs, analysis, openai, processedJobs);
+                // FIXED: Filter for 70%+ matches with improved algorithm
+                const highMatchJobs = await filterHighMatchJobsFixed(uniqueSourceJobs, analysis, openai, processedJobs);
                 console.log(`   Jobs with 70%+ match: ${highMatchJobs.length}`);
                 
                 if (highMatchJobs.length > 0) {
-                    // Return ALL jobs with 70%+ match from this source (no limit)
                     console.log(`   Returning ${highMatchJobs.length} jobs from ${source.name}`);
                     
                     // Add to final results
@@ -413,8 +416,8 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
                 }
             }
 
-            // Rate limiting between sources (reduced for faster processing)
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Rate limiting between sources
+            await new Promise(resolve => setTimeout(resolve, 800));
         }
 
         console.log(`\n📊 === FINAL PROCESSING ===`);
@@ -449,10 +452,46 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
     }
 }
 
-// Function to filter jobs with 70%+ match immediately
-async function filterHighMatchJobs(jobs, analysis, openai, processedJobs) {
+// FIXED: More lenient remote job filtering
+function isRemoteJobFixed(job) {
+    if (!job) return false;
+    
+    const title = (job.title || '').toLowerCase();
+    const description = (job.description || '').toLowerCase(); 
+    const location = (job.location || '').toLowerCase();
+    
+    const allText = `${title} ${description} ${location}`;
+    
+    // FIXED: Expanded remote indicators
+    const remoteKeywords = [
+        'remote', 'work from home', 'wfh', 'telecommute', 'distributed', 'anywhere',
+        'virtual', 'home-based', 'location independent', 'work remotely', 'remote work',
+        'fully remote', '100% remote', 'remote position', 'remote job', 'remote role'
+    ];
+    
+    const hasRemote = remoteKeywords.some(keyword => allText.includes(keyword)) || 
+                     location.includes('remote') ||
+                     location.includes('anywhere') ||
+                     location.includes('worldwide') ||
+                     location.includes('global');
+    
+    // FIXED: Reduced non-remote exclusions (was too strict)
+    const nonRemoteKeywords = ['on-site only', 'onsite only', 'office required only', 'relocation required'];
+    const hasNonRemote = nonRemoteKeywords.some(keyword => allText.includes(keyword));
+    
+    // FIXED: If location suggests remote, include it even if description doesn't explicitly say so
+    const locationSuggestsRemote = location.includes('remote') || 
+                                  location.includes('anywhere') || 
+                                  location.includes('global') ||
+                                  location.includes('worldwide');
+    
+    return (hasRemote || locationSuggestsRemote) && !hasNonRemote;
+}
+
+// FIXED: Improved high match filtering function
+async function filterHighMatchJobsFixed(jobs, analysis, openai, processedJobs) {
     const highMatchJobs = [];
-    const batchSize = 5;
+    const batchSize = 8; // Increased from 5 to process more jobs
     
     for (let i = 0; i < jobs.length; i += batchSize) {
         const batch = jobs.slice(i, i + batchSize);
@@ -468,56 +507,43 @@ async function filterHighMatchJobs(jobs, analysis, openai, processedJobs) {
             }
             
             try {
-                await new Promise(resolve => setTimeout(resolve, index * 50));
+                await new Promise(resolve => setTimeout(resolve, index * 100));
                 
-                // Fast basic match first
-                const basicMatch = calculateEnhancedBasicMatch(job, analysis);
+                // FIXED: Improved basic match calculation
+                const basicMatch = calculateEnhancedBasicMatchFixed(job, analysis);
                 
-                // Return only 70% or higher matches
+                // Return 70% or higher matches
                 if (basicMatch >= 70) {
-                    const enhancedMatch = await calculateSingleEnhancedJobMatch(job, analysis, openai);
-                    const finalJob = { ...job, ...enhancedMatch };
-                    
-                    // Return only 70% or higher matches
-                    if (finalJob.matchPercentage >= 70) {
-                        return finalJob;
+                    try {
+                        const enhancedMatch = await calculateSingleEnhancedJobMatch(job, analysis, openai);
+                        const finalJob = { ...job, ...enhancedMatch };
+                        
+                        // Return only 70% or higher matches
+                        if (finalJob.matchPercentage >= 70) {
+                            return finalJob;
+                        }
+                    } catch (aiError) {
+                        // FIXED: If AI fails, use basic match if it's high enough
+                        console.warn(`AI match failed for "${job.title}", using basic match: ${basicMatch}%`);
+                        return {
+                            ...job,
+                            matchPercentage: basicMatch,
+                            matchedTechnicalSkills: [],
+                            matchedSoftSkills: [],
+                            matchedExperience: [],
+                            missingRequirements: [],
+                            reasoning: `Basic algorithm match: ${basicMatch}% (AI analysis unavailable)`,
+                            industryMatch: Math.min(basicMatch + 5, 95),
+                            seniorityMatch: Math.min(basicMatch, 90),
+                            growthPotential: basicMatch >= 85 ? 'high' : basicMatch >= 75 ? 'medium' : 'low'
+                        };
                     }
-                } else if (basicMatch >= 75) {
-                    // Use basic match if it's already very high
-                    return {
-                        ...job,
-                        matchPercentage: basicMatch,
-                        matchedTechnicalSkills: [],
-                        matchedSoftSkills: [],
-                        matchedExperience: [],
-                        missingRequirements: [],
-                        reasoning: 'High basic match - meets 70% threshold',
-                        industryMatch: basicMatch,
-                        seniorityMatch: basicMatch,
-                        growthPotential: 'medium'
-                    };
                 }
                 
                 return null;
 
             } catch (error) {
                 console.error(`Match calculation failed for "${job.title}":`, error.message);
-                // FALLBACK: Only return if basic match is 70% or higher
-                const basicMatch = calculateEnhancedBasicMatch(job, analysis);
-                if (basicMatch >= 70) {
-                    return {
-                        ...job,
-                        matchPercentage: basicMatch,
-                        matchedTechnicalSkills: [],
-                        matchedSoftSkills: [],
-                        matchedExperience: [],
-                        missingRequirements: [],
-                        reasoning: 'AI analysis failed - using basic match above 70%',
-                        industryMatch: basicMatch,
-                        seniorityMatch: basicMatch,
-                        growthPotential: 'medium'
-                    };
-                }
                 return null;
             }
         });
@@ -526,137 +552,115 @@ async function filterHighMatchJobs(jobs, analysis, openai, processedJobs) {
         const validResults = batchResults.filter(job => job !== null);
         highMatchJobs.push(...validResults);
         
-        // No limit - return all 70%+ matches from this source
         if (i + batchSize < jobs.length) {
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise(resolve => setTimeout(resolve, 500));
         }
     }
     
     return highMatchJobs;
 }
 
-// Enhanced basic matching with better scoring
-// FIXED: calculateEnhancedBasicMatch - Lower threshold and better scoring
-function calculateEnhancedBasicMatch(job, analysis) {
+// FIXED: Enhanced basic matching with better scoring algorithm
+function calculateEnhancedBasicMatchFixed(job, analysis) {
     if (!job) return 0;
     
     const jobText = `${job.title || ''} ${job.description || ''}`.toLowerCase();
-    let score = 0;
-    let totalWeight = 0;
+    let totalScore = 0;
+    let maxPossibleScore = 0;
     
-    // Technical skills match (30% weight) - FIXED
+    // FIXED: Technical skills match (35% weight) - IMPROVED ALGORITHM
     const techSkills = analysis.technicalSkills || [];
     if (techSkills.length > 0) {
         let matchedCount = 0;
         techSkills.forEach(skill => {
-            let skillString = '';
-            if (typeof skill === 'string') {
-                skillString = skill;
-            } else if (skill && typeof skill === 'object') {
-                skillString = JSON.stringify(skill);
-            } else {
-                skillString = String(skill || '');
-            }
+            const skillString = typeof skill === 'string' ? skill.toLowerCase() : String(skill || '').toLowerCase();
             
-            if (jobText.includes(skillString.toLowerCase())) {
-                matchedCount++;
-            }
-        });
-        
-        const techScore = Math.min((matchedCount / techSkills.length) * 100, 100);
-        score += techScore * 0.30;
-        totalWeight += 0.30;
-    }
-    
-    // Experience match (25% weight) - FIXED  
-    const experience = analysis.workExperience || [];
-    if (experience.length > 0) {
-        let matchedCount = 0;
-        experience.forEach(exp => {
-            let expString = '';
-            if (typeof exp === 'string') {
-                expString = exp;
-            } else if (exp && typeof exp === 'object') {
-                if (exp.jobTitle) {
-                    expString = exp.jobTitle;
-                } else {
-                    expString = JSON.stringify(exp);
+            // FIXED: Better skill matching with partial matches
+            if (skillString.length > 2) {
+                if (jobText.includes(skillString) || 
+                    jobText.includes(skillString.replace(/[^a-z0-9]/g, '')) ||
+                    (skillString.includes('.') && jobText.includes(skillString.replace('.', '')))) {
+                    matchedCount++;
                 }
-            } else {
-                expString = String(exp || '');
-            }
-            
-            // Look for role keywords in job text
-            const roleKeywords = expString.toLowerCase().split(' ');
-            if (roleKeywords.some(keyword => keyword.length > 2 && jobText.includes(keyword))) {
-                matchedCount++;
             }
         });
         
-        const expScore = Math.min((matchedCount / experience.length) * 100, 100);
-        score += expScore * 0.25;
-        totalWeight += 0.25;
+        const techScore = Math.min((matchedCount / Math.max(techSkills.length, 1)) * 100, 100);
+        totalScore += techScore * 0.35;
+        maxPossibleScore += 35;
+        console.log(`    Tech skills: ${matchedCount}/${techSkills.length} = ${techScore.toFixed(1)}%`);
     }
     
-    // Industry match (20% weight) - FIXED
+    // FIXED: Job title/role match (30% weight) - NEW
+    const workExperience = analysis.workExperience || [];
+    if (workExperience.length > 0) {
+        let roleMatchScore = 0;
+        const jobTitle = job.title.toLowerCase();
+        
+        workExperience.forEach(exp => {
+            const expString = typeof exp === 'string' ? exp.toLowerCase() : 
+                             (exp && exp.jobTitle ? exp.jobTitle.toLowerCase() : String(exp || '').toLowerCase());
+            
+            // FIXED: Better role matching
+            const expWords = expString.split(' ').filter(word => word.length > 2);
+            const titleWords = jobTitle.split(' ').filter(word => word.length > 2);
+            
+            const matchingWords = expWords.filter(word => 
+                titleWords.some(titleWord => titleWord.includes(word) || word.includes(titleWord))
+            );
+            
+            if (matchingWords.length > 0) {
+                roleMatchScore = Math.max(roleMatchScore, (matchingWords.length / Math.max(expWords.length, 1)) * 100);
+            }
+        });
+        
+        totalScore += roleMatchScore * 0.30;
+        maxPossibleScore += 30;
+        console.log(`    Role match: ${roleMatchScore.toFixed(1)}%`);
+    }
+    
+    // FIXED: Industry match (20% weight)
     const industries = analysis.industries || [];
     if (industries.length > 0) {
-        let hasIndustryMatch = false;
+        let industryMatchScore = 0;
         industries.forEach(industry => {
-            let industryString = '';
-            if (typeof industry === 'string') {
-                industryString = industry;
-            } else if (industry && typeof industry === 'object') {
-                industryString = JSON.stringify(industry);
-            } else {
-                industryString = String(industry || '');
-            }
-            
-            if (jobText.includes(industryString.toLowerCase())) {
-                hasIndustryMatch = true;
+            const industryString = typeof industry === 'string' ? industry.toLowerCase() : String(industry || '').toLowerCase();
+            if (industryString.length > 2 && jobText.includes(industryString)) {
+                industryMatchScore = 100;
             }
         });
         
-        const industryScore = hasIndustryMatch ? 100 : 0;
-        score += industryScore * 0.20;
-        totalWeight += 0.20;
+        totalScore += industryMatchScore * 0.20;
+        maxPossibleScore += 20;
+        console.log(`    Industry match: ${industryMatchScore}%`);
     }
     
-    // Responsibility match (15% weight) - FIXED
+    // FIXED: Keywords/responsibilities match (15% weight)
     const responsibilities = analysis.responsibilities || [];
     if (responsibilities.length > 0) {
-        let matchedCount = 0;
+        let keywordMatchCount = 0;
         responsibilities.forEach(resp => {
-            let respString = '';
-            if (typeof resp === 'string') {
-                respString = resp;
-            } else if (resp && typeof resp === 'object') {
-                respString = JSON.stringify(resp);
-            } else {
-                respString = String(resp || '');
-            }
+            const respString = typeof resp === 'string' ? resp.toLowerCase() : String(resp || '').toLowerCase();
+            const keywords = respString.split(' ').filter(word => word.length > 3);
             
-            // Look for key responsibility words
-            const respWords = respString.toLowerCase().split(' ').filter(word => word.length > 3);
-            if (respWords.some(word => jobText.includes(word))) {
-                matchedCount++;
-            }
+            keywords.forEach(keyword => {
+                if (jobText.includes(keyword)) {
+                    keywordMatchCount++;
+                }
+            });
         });
         
-        const respScore = Math.min((matchedCount / responsibilities.length) * 100, 100);
-        score += respScore * 0.15;
-        totalWeight += 0.15;
+        const keywordScore = Math.min((keywordMatchCount / Math.max(responsibilities.length * 2, 1)) * 100, 100);
+        totalScore += keywordScore * 0.15;
+        maxPossibleScore += 15;
+        console.log(`    Keyword match: ${keywordScore.toFixed(1)}%`);
     }
     
-    // Base score for any match (10% weight)
-    const baseScore = jobText.length > 10 ? 50 : 0; // Give some base score if job has content
-    score += baseScore * 0.10;
-    totalWeight += 0.10;
+    // FIXED: Calculate final score
+    const finalScore = maxPossibleScore > 0 ? Math.round((totalScore / maxPossibleScore) * 100) : 0;
     
-    // Normalize score based on available factors
-    const finalScore = totalWeight > 0 ? Math.round(score / totalWeight) : 0;
+    console.log(`    Final basic match for "${job.title}": ${finalScore}%`);
     
-    // Return the calculated score without artificial minimum (maintains 70%+ threshold requirement)
     return Math.min(finalScore, 95);
 }
 
