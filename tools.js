@@ -389,7 +389,7 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
                 const uniqueSourceJobs = removeDuplicateJobs(sourceResults);
                 console.log(`   After deduplication: ${uniqueSourceJobs.length}`);
                 
-                // FILTER FOR 70%+ MATCHES IMMEDIATELY (improved threshold)
+                // FILTER FOR 70%+ MATCHES IMMEDIATELY (maintains user-requested threshold)
                 const highMatchJobs = await filterHighMatchJobs(uniqueSourceJobs, analysis, openai, processedJobs);
                 console.log(`   Jobs with 70%+ match: ${highMatchJobs.length}`);
                 
@@ -656,8 +656,8 @@ function calculateEnhancedBasicMatch(job, analysis) {
     // Normalize score based on available factors
     const finalScore = totalWeight > 0 ? Math.round(score / totalWeight) : 0;
     
-    // LOWERED THRESHOLD: Return at least 40 if there's any reasonable match
-    return Math.max(Math.min(finalScore, 95), jobText.length > 50 ? 40 : 0);
+    // Return the calculated score without artificial minimum (maintains 70%+ threshold requirement)
+    return Math.min(finalScore, 95);
 }
 
 // Enhanced search query generation
