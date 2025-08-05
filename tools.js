@@ -1,7 +1,5 @@
 import dotenv from 'dotenv';
 import axios from 'axios';
-import puppeteer from 'puppeteer';
-import * as cheerio from 'cheerio';
 
 dotenv.config({ path: './local.env' });
 
@@ -331,8 +329,9 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
         const finalResults = [];
         const processedJobs = new Set(); // Track duplicates across all sources
 
-        // Process each source SEQUENTIALLY with 60% threshold filtering
+        // Process each source SEQUENTIALLY with 70% threshold filtering
         const sources = [
+            { name: 'Theirstack', func: searchTheirstackJobs },
             { name: 'Adzuna', func: searchAdzunaJobs },
             { name: 'TheMuse', func: searchTheMuseJobs },
             { name: 'Reed', func: searchReedJobs },
@@ -384,28 +383,24 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
                 const uniqueSourceJobs = removeDuplicateJobs(sourceResults);
                 console.log(`   After deduplication: ${uniqueSourceJobs.length}`);
                 
-                // FILTER FOR 60%+ MATCHES IMMEDIATELY (lowered from 70%)
+                // FILTER FOR 70%+ MATCHES IMMEDIATELY (improved threshold)
                 const highMatchJobs = await filterHighMatchJobs(uniqueSourceJobs, analysis, openai, processedJobs);
-                console.log(`   Jobs with 60%+ match: ${highMatchJobs.length}`);
+                console.log(`   Jobs with 70%+ match: ${highMatchJobs.length}`);
                 
                 if (highMatchJobs.length > 0) {
-                    // Limit to top 100 matches for this source
-                    const topJobs = highMatchJobs
-                        .sort((a, b) => (b.matchPercentage || 0) - (a.matchPercentage || 0))
-                        .slice(0, 100);
-                    
-                    console.log(`   Returning top ${topJobs.length} jobs from ${source.name}`);
+                    // Return ALL jobs with 70%+ match from this source (no limit)
+                    console.log(`   Returning ${highMatchJobs.length} jobs from ${source.name}`);
                     
                     // Add to final results
-                    finalResults.push(...topJobs);
+                    finalResults.push(...highMatchJobs);
                     
                     // Send real-time update
                     if (onJobFound) {
-                        onJobFound(topJobs, `${source.name} (${topJobs.length} good matches)`);
+                        onJobFound(highMatchJobs, `${source.name} (${highMatchJobs.length} matches)`);
                     }
                     
                     // Track these jobs to avoid duplicates from other sources
-                    topJobs.forEach(job => {
+                    highMatchJobs.forEach(job => {
                         const key = `${job.title.toLowerCase().trim()}-${job.company.toLowerCase().trim()}`;
                         processedJobs.add(key);
                     });
@@ -417,10 +412,9 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
         }
 
         console.log(`\n📊 === FINAL PROCESSING ===`);
-        console.log(`Total good-match jobs collected: ${finalResults.length}`);
+        console.log(`Total 70%+ match jobs collected: ${finalResults.length}`);
 
         if (finalResults.length === 0) {
-            // UPDATED ERROR MESSAGE with lower threshold
             throw new Error('No jobs found with 70% or higher match. The job market may be limited right now, or try updating your resume with more common job titles and skills that appear in job postings.');
         }
 
@@ -428,7 +422,7 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
         const sortedJobs = finalResults.sort((a, b) => (b.matchPercentage || 0) - (a.matchPercentage || 0));
 
         console.log(`\n🎯 === SEARCH COMPLETED ===`);
-        console.log(`Returning ${sortedJobs.length} quality matches`);
+        console.log(`Returning ${sortedJobs.length} quality matches from all sources`);
         console.log(`Top matches: ${sortedJobs.slice(0, 3).map(job => `${job.title} (${job.matchPercentage}%)`).join(' | ')}`);
 
         // Return with pagination - only quality matches
@@ -438,15 +432,13 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
             totalJobs: sortedJobs.length
         };
 
-                } catch (error) {
+    } catch (error) {
         console.error('❌ Job search error:', error);
         throw error;
     }
 }
 
-// New function to filter jobs with 60%+ match immediately
-// FIND this function in tools.js and REPLACE it:
-
+// Function to filter jobs with 70%+ match immediately
 async function filterHighMatchJobs(jobs, analysis, openai, processedJobs) {
     const highMatchJobs = [];
     const batchSize = 5;
@@ -470,12 +462,12 @@ async function filterHighMatchJobs(jobs, analysis, openai, processedJobs) {
                 // Fast basic match first
                 const basicMatch = calculateEnhancedBasicMatch(job, analysis);
                 
-                // FIXED: Back to 70% threshold for high quality matches
-                if (basicMatch >= 65) {
+                // Return only 70% or higher matches
+                if (basicMatch >= 70) {
                     const enhancedMatch = await calculateSingleEnhancedJobMatch(job, analysis, openai);
                     const finalJob = { ...job, ...enhancedMatch };
                     
-                    // FIXED: Return only 70% or higher matches
+                    // Return only 70% or higher matches
                     if (finalJob.matchPercentage >= 70) {
                         return finalJob;
                     }
@@ -523,12 +515,7 @@ async function filterHighMatchJobs(jobs, analysis, openai, processedJobs) {
         const validResults = batchResults.filter(job => job !== null);
         highMatchJobs.push(...validResults);
         
-        // Stop if we have enough results from this source
-        if (highMatchJobs.length >= 100) {
-            console.log(`   Reached 100 high-match jobs, stopping further processing for this source`);
-            break;
-        }
-        
+        // No limit - return all 70%+ matches from this source
         if (i + batchSize < jobs.length) {
             await new Promise(resolve => setTimeout(resolve, 200));
         }
@@ -866,6 +853,64 @@ function isRemoteJob(job) {
     const hasNonRemote = nonRemoteKeywords.some(keyword => allText.includes(keyword));
     
     return hasRemote && !hasNonRemote;
+}
+
+// THEIRSTACK API - Enhanced for remote jobs
+async function searchTheirstackJobs(query, filters) {
+    const THEIRSTACK_API_KEY = process.env.THEIRSTACK_API_KEY;
+    
+    if (!THEIRSTACK_API_KEY) {
+        console.log('❌ Theirstack credentials missing');
+        return [];
+    }
+
+    try {
+        console.log('🔍 Theirstack: Making API request...');
+        
+        const response = await axios.get('https://api.theirstack.com/v1/jobs/search', {
+            params: {
+                q: query,
+                remote: true,
+                limit: 50,
+                sort: 'relevance'
+            },
+            headers: {
+                'Authorization': `Bearer ${THEIRSTACK_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 15000
+        });
+
+        console.log(`✅ Theirstack API responded with ${response.data?.jobs?.length || 0} jobs`);
+
+        if (!response.data?.jobs) {
+            return [];
+        }
+
+        return response.data.jobs.map(job => {
+            // Enhanced salary handling
+            let salary = formatSalary(job.salary_min, job.salary_max);
+            if (salary === 'Salary not specified') {
+                salary = extractSalaryFromDescription(job.description);
+            }
+            
+            return {
+                title: job.title,
+                company: job.company?.name || 'Unknown Company',
+                location: job.location || 'Remote',
+                link: job.url,
+                source: 'Theirstack',
+                description: job.description || '',
+                salary: salary,
+                type: job.employment_type || 'Full-time',
+                datePosted: job.posted_at || new Date().toISOString()
+            };
+        });
+        
+    } catch (error) {
+        console.error('❌ Theirstack error:', error.message);
+        return [];
+    }
 }
 
 // ADZUNA API - Enhanced for remote jobs

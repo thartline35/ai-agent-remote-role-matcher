@@ -126,6 +126,7 @@ app.get('/api/health', (req, res) => {
         timestamp: new Date().toISOString(),
         apis: {
             openai: process.env.OPENAI_API_KEY ? 'configured' : 'missing',
+            theirstack: process.env.THEIRSTACK_API_KEY ? 'configured' : 'missing',
             adzuna: (process.env.ADZUNA_APP_ID && process.env.ADZUNA_API_KEY) ? 'configured' : 'missing',
             themuse: process.env.THEMUSE_API_KEY ? 'configured' : 'missing',
             reed: process.env.REED_API_KEY ? 'configured' : 'missing',
@@ -325,15 +326,16 @@ app.post('/api/search-jobs', async (req, res) => {
             });
         }
 
-        // Validate API configurations - INCLUDING RAPIDAPI
+        // Validate API configurations - INCLUDING THEIRSTACK
         const missingAPIs = [];
         if (!process.env.OPENAI_API_KEY) missingAPIs.push('OpenAI');
+        if (!process.env.THEIRSTACK_API_KEY) missingAPIs.push('Theirstack');
         if (!process.env.ADZUNA_APP_ID || !process.env.ADZUNA_API_KEY) missingAPIs.push('Adzuna');
         if (!process.env.THEMUSE_API_KEY) missingAPIs.push('TheMuse');
         if (!process.env.REED_API_KEY) missingAPIs.push('Reed');
         if (!process.env.RAPIDAPI_KEY) missingAPIs.push('RapidAPI');
 
-        if (missingAPIs.length === 5) {
+        if (missingAPIs.length === 6) {
             throw new Error('No job search APIs are configured. Please check API credentials.');
         }
 
@@ -344,7 +346,7 @@ app.post('/api/search-jobs', async (req, res) => {
             responsibilities: analysis.responsibilities?.length || 0,
             seniorityLevel: analysis.seniorityLevel || 'unknown',
             filters: filters,
-            availableAPIs: 5 - missingAPIs.length
+            availableAPIs: 6 - missingAPIs.length
         });
 
         // Set up Server-Sent Events for real-time updates
@@ -360,7 +362,7 @@ app.post('/api/search-jobs', async (req, res) => {
         res.write(`data: ${JSON.stringify({
             type: 'search_started',
             message: 'Starting job search with enhanced matching...',
-            availableAPIs: 4 - missingAPIs.length
+            availableAPIs: 5 - missingAPIs.length
         })}\n\n`);
 
         let totalJobsFound = 0;
@@ -586,6 +588,7 @@ if (process.env.NODE_ENV !== 'production') {
         
         console.log('\n🔑 API CONFIGURATION STATUS:');
         console.log(`  OpenAI API Key:     ${process.env.OPENAI_API_KEY ? '✅ Configured' : '❌ Missing (REQUIRED)'}`);
+        console.log(`  Theirstack API Key: ${process.env.THEIRSTACK_API_KEY ? '✅ Configured' : '❌ Missing (Optional)'}`);
         console.log(`  Adzuna App ID:      ${process.env.ADZUNA_APP_ID ? '✅ Configured' : '❌ Missing (Optional)'}`);
         console.log(`  Adzuna API Key:     ${process.env.ADZUNA_API_KEY ? '✅ Configured' : '❌ Missing (Optional)'}`);
         console.log(`  TheMuse API Key:    ${process.env.THEMUSE_API_KEY ? '✅ Configured' : '❌ Missing (Optional)'}`);
@@ -594,13 +597,14 @@ if (process.env.NODE_ENV !== 'production') {
         
         // Count configured APIs
         const configuredAPIs = [
+            process.env.THEIRSTACK_API_KEY,
             process.env.ADZUNA_APP_ID && process.env.ADZUNA_API_KEY,
             process.env.THEMUSE_API_KEY,
             process.env.REED_API_KEY,
             process.env.RAPIDAPI_KEY
         ].filter(Boolean).length;
         
-        console.log(`\n📊 JOB SEARCH CAPABILITY: ${configuredAPIs}/4 APIs configured`);
+        console.log(`\n📊 JOB SEARCH CAPABILITY: ${configuredAPIs}/5 APIs configured`);
         
         if (!process.env.OPENAI_API_KEY) {
             console.log('\n⚠️  WARNING: OpenAI API key is missing! Resume analysis will fail.');
@@ -608,8 +612,8 @@ if (process.env.NODE_ENV !== 'production') {
         
         if (configuredAPIs === 0) {
             console.log('⚠️  WARNING: No job search APIs configured! Job search will fail.');
-        } else if (configuredAPIs < 4) {
-            console.log(`ℹ️  INFO: ${4 - configuredAPIs} job search APIs are missing. Some job sources won't be available.`);
+        } else if (configuredAPIs < 5) {
+            console.log(`ℹ️  INFO: ${5 - configuredAPIs} job search APIs are missing. Some job sources won't be available.`);
         }
         
         console.log('\n🎯 FEATURES ENABLED:');

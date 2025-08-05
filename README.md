@@ -12,7 +12,7 @@ An intelligent web application that analyzes your resume, extracts your skills, 
 
 🔍 **Sequential Processing with 70% Threshold**: Smart system processes each API source individually, immediately filtering for jobs with 70%+ match rate
 
-🌍 **Multi-Source Job Search**: Searches 5+ job sources including APIs (Adzuna, TheMuse, Reed, JSearch-RapidAPI, RapidAPI-Jobs)
+🌍 **Multi-Source Job Search**: Searches 6+ job sources including APIs (Theirstack, Adzuna, TheMuse, Reed, JSearch-RapidAPI, RapidAPI-Jobs)
 
 ⚡ **Real Application Links**: Direct links to actual job application pages from all sources
 
@@ -58,6 +58,20 @@ An intelligent web application that analyzes your resume, extracts your skills, 
 This application supports real job data from multiple sources with intelligent filtering. You need to set up API keys for the job sources you want to use:
 
 **Required API Keys**
+- **OpenAI API** (Required for AI features)
+  - Get API key from: https://platform.openai.com/api-keys
+  - Add to your .env file:
+    ```
+    OPENAI_API_KEY=your_openai_api_key_here
+    ```
+
+- **Theirstack API** (Recommended primary source)
+  - Get API key from: https://theirstack.com/
+  - Add to your .env file:
+    ```
+    THEIRSTACK_API_KEY=your_theirstack_api_key_here
+    ```
+
 - **Adzuna API** (Free with registration)
   - Get API keys from: https://developer.adzuna.com/
   - Add to your .env file:
@@ -80,21 +94,23 @@ This application supports real job data from multiple sources with intelligent f
     REED_API_KEY=your_reed_api_key_here
     ```
 
-**Web Scraping Sources** (No API keys required)
-- LinkedIn Jobs, Indeed, Glassdoor, Remote.co
-- Real-time job scraping with intelligent filtering
-- Respects robots.txt and includes proper rate limiting
-- Note: Some sources have blocking functionality that prevents web scraping. 
+**API-Based Job Sources** (API keys required)
+- Theirstack API (recommended primary source)
+- Adzuna API, TheMuse API, Reed API
+- RapidAPI job aggregators (JSearch, Jobs API)
+- All sources provide real-time job data with intelligent filtering 
 
 **Environment Variables**
 Update your local.env file to include:
 
 ```
 OPENAI_API_KEY=your_openai_api_key_here
+THEIRSTACK_API_KEY=your_theirstack_api_key_here
 ADZUNA_APP_ID=your_adzuna_app_id_here
 ADZUNA_API_KEY=your_adzuna_api_key_here
 THEMUSE_API_KEY=your_themuse_api_key_here
 REED_API_KEY=your_reed_api_key_here
+RAPIDAPI_KEY=your_rapidapi_key_here
 ```
 
 ## 🛠️ Tech Stack
@@ -102,8 +118,7 @@ REED_API_KEY=your_reed_api_key_here
 - **Frontend**: Vanilla JavaScript, HTML5, CSS3
 - **AI**: OpenAI GPT-3.5-turbo for resume analysis and job matching
 - **PDF Parsing**: pdf2json for reliable PDF text extraction
-- **Job APIs**: Adzuna API, TheMuse API, Reed API
-- **Web Scraping**: Puppeteer for LinkedIn, Indeed, Glassdoor, Remote.co
+- **Job APIs**: Theirstack API, Adzuna API, TheMuse API, Reed API, RapidAPI
 - **Styling**: Modern CSS with gradients, animations, and responsive design
 
 ## 🚀 Quick Start
@@ -138,6 +153,7 @@ REED_API_KEY=your_reed_api_key_here
 
 4. **Get API Keys**:
    - OpenAI: https://platform.openai.com/api-keys
+   - Theirstack: https://theirstack.com/
    - Adzuna: https://developer.adzuna.com/
    - TheMuse: https://www.themuse.com/developers
    - Reed: https://www.reed.co.uk/developers/
@@ -239,6 +255,12 @@ ai-agent/
 - **Purpose**: Resume analysis and job matching
 - **Get it**: [OpenAI Platform](https://platform.openai.com/api-keys)
 - **Cost**: Pay-per-use (very affordable for this use case)
+
+### Theirstack API
+- **Purpose**: Primary job search source with comprehensive listings
+- **Get it**: [Theirstack](https://theirstack.com/)
+- **Cost**: Usually free tier available
+- **Rate Limit**: Varies by plan
 
 ### Adzuna API
 - **Purpose**: Real job listings from multiple sources
