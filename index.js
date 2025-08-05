@@ -16,9 +16,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Load environment variables - use local.env for development, Vercel env vars for production
-if (process.env.NODE_ENV !== 'production') {
-    dotenv.config({ path: './local.env' });
-}
+dotenv.config({ path: './local.env' });
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -31,17 +29,18 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 
 // Serve static files from root directory for Vercel
-app.use(express.static(path.join(__dirname), {
-    setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.js')) {
-            res.setHeader('Content-Type', 'application/javascript');
-        } else if (filePath.endsWith('.css')) {
-            res.setHeader('Content-Type', 'text/css');
-        } else if (filePath.endsWith('.html')) {
-            res.setHeader('Content-Type', 'text/html');
-        }
-    }
-}));
+// REMOVE the problematic line above and replace with:
+
+// Serve specific files only
+app.get('/frontend.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.sendFile(path.join(__dirname, 'frontend.js'));
+});
+
+app.get('/index.css', (req, res) => {
+    res.setHeader('Content-Type', 'text/css');
+    res.sendFile(path.join(__dirname, 'index.css'));
+});
 
 // Also serve static files from public directory
 app.use(express.static(path.join(__dirname, 'public'), {
