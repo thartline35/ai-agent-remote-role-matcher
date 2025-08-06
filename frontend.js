@@ -477,24 +477,28 @@ class AIJobMatcher {
     }
 
     async handleStreamingUpdate(data) {
-        console.log('📨 Handling streaming update:', data.type);
+        console.log('📨 Handling streaming update:', data.type, data);
 
         switch (data.type) {
             case 'search_started':
+                console.log('🎬 Search started:', data.message);
                 this.loadingMessage.textContent = data.message;
                 this.updateProgressBar(5);
                 break;
 
             case 'progress_update':
+                console.log('📊 Progress update:', data.percentage + '%', data.message);
                 this.loadingMessage.textContent = data.message;
                 this.updateProgressBar(data.percentage);
                 break;
 
             case 'jobs_found':
+                console.log('🎯 Jobs found from', data.source + ':', data.jobs.length, 'jobs');
                 await this.handleJobsFound(data);
                 break;
 
             case 'search_complete':
+                console.log('🏁 Search complete:', data.totalJobs, 'total jobs');
                 await this.handleSearchComplete(data);
                 break;
 
@@ -503,20 +507,29 @@ class AIJobMatcher {
                 this.showError(data.error);
                 this.showLoading(false);
                 break;
+
+            default:
+                console.warn('❓ Unknown streaming data type:', data.type, data);
+                break;
         }
     }
 
     async handleJobsFound(data) {
         console.log(`🎯 RECEIVED: ${data.jobs.length} jobs from ${data.source}`);
+        console.log(`📊 Current jobResults length before adding: ${this.jobResults.length}`);
 
-        // Add jobs to results
+        // Add jobs to results - CRITICAL LINE
         this.jobResults.push(...data.jobs);
         this.totalJobs = data.totalFound || this.jobResults.length;
+
+        console.log(`📊 jobResults length after adding: ${this.jobResults.length}`);
+        console.log(`📊 Total jobs reported: ${this.totalJobs}`);
 
         // Show results section if first jobs
         if (this.resultsSection.style.display === 'none') {
             this.resultsSection.style.display = 'block';
             this.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            console.log('📺 Results section now visible');
         }
 
         // Display jobs immediately with animation
@@ -548,6 +561,8 @@ class AIJobMatcher {
         if (data.sourceProgress) {
             this.updateProgressBar(Math.min(data.sourceProgress, 90));
         }
+
+        console.log(`✅ Displayed ${data.jobs.length} jobs from ${data.source}, total displayed: ${this.displayedJobsCount}`);
     }
 
     async handleSearchComplete(data) {
@@ -568,6 +583,8 @@ class AIJobMatcher {
     }
 
     updateJobStats() {
+        console.log(`📊 Updating job stats - Total: ${this.totalJobs}, Displayed: ${this.displayedJobsCount}`);
+        
         if (this.totalJobsElement) {
             this.totalJobsElement.textContent = this.totalJobs;
         }
@@ -575,6 +592,8 @@ class AIJobMatcher {
         // Calculate REAL average match percentage from AI analysis
         if (this.jobResults.length > 0) {
             const jobsWithMatches = this.jobResults.filter(job => job.matchPercentage);
+            console.log(`📊 Jobs with match percentages: ${jobsWithMatches.length}/${this.jobResults.length}`);
+            
             if (jobsWithMatches.length > 0) {
                 const avgMatch = Math.round(
                     jobsWithMatches.reduce((sum, job) => sum + job.matchPercentage, 0) / jobsWithMatches.length
@@ -582,11 +601,20 @@ class AIJobMatcher {
                 if (this.matchPercentage) {
                     this.matchPercentage.textContent = `${avgMatch}%`;
                 }
+                console.log(`📊 Average match percentage: ${avgMatch}%`);
             } else {
                 if (this.matchPercentage) {
                     this.matchPercentage.textContent = 'Analyzing...';
                 }
             }
+        }
+    }
+
+    // Add missing method for compatibility
+    displayJobResults() {
+        console.log('📺 displayJobResults called - showing all jobs');
+        if (this.jobResults && this.jobResults.length > 0) {
+            this.displayFilteredResults(this.jobResults);
         }
     }
 
@@ -834,7 +862,11 @@ class AIJobMatcher {
 
         this.currentFilteredJobs = [];
         this.displayedJobsCount = 0;
-        this.displayFilteredResults(this.jobResults);
+        
+        // Show all jobs when filters are cleared
+        if (this.jobResults && this.jobResults.length > 0) {
+            this.displayFilteredResults(this.jobResults);
+        }
         
         // Hide clear filters button
         if (this.clearFilters) {
