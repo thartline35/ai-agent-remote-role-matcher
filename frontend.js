@@ -698,14 +698,13 @@ class AIJobMatcher {
 
         card.innerHTML = `
             <div class="job-header" onclick="this.parentElement.classList.toggle('expanded')">
-                <div>
+                <div class="job-main-info">
                     <h3 class="job-title">${job.title || 'Job Title Not Available'}</h3>
                     <p class="job-company">${job.company || 'Company Not Available'}</p>
                     <p class="job-location"><i class="fas fa-map-marker-alt"></i> ${job.location || 'Remote'}</p>
                     <p class="job-source"><i class="fas fa-external-link-alt"></i> Source: ${job.source || 'Unknown'}</p>
                 </div>
-                <div class="job-match-info">
-                    <span class="job-match ${matchClass}">${matchPercentage}% Overall Match</span>
+                <div class="job-header-right">
                     <div class="expand-indicator">
                         <i class="fas fa-chevron-down"></i>
                     </div>
@@ -734,6 +733,9 @@ class AIJobMatcher {
                         <i class="fas fa-bookmark"></i>
                         Save Job
                     </button>
+                    <div class="job-match-badge">
+                        <span class="job-match ${matchClass}">${matchPercentage}% Match</span>
+                    </div>
                 </div>
             </div>
         `;
@@ -742,10 +744,12 @@ class AIJobMatcher {
     }
 
     getMatchClass(matchPercentage) {
-        if (matchPercentage >= 85) return 'high-match';
+        // Consistent colors for 70%+ threshold
+        if (matchPercentage >= 85) return 'excellent-match';
+        if (matchPercentage >= 80) return 'great-match';
         if (matchPercentage >= 75) return 'good-match';
-        if (matchPercentage >= 70) return 'medium-match';
-        return 'low-match';
+        if (matchPercentage >= 70) return 'solid-match';
+        return 'low-match'; // This shouldn't appear since we filter at 70%
     }
 
     getMatchClass(matchPercentage) {

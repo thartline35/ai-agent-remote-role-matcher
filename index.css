@@ -1953,3 +1953,154 @@
       transform: translateY(-20px);
     }
   }
+
+  /* Improved Job Card Layout - Add this to your index.css */
+
+.job-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.job-header:hover {
+  background-color: rgba(102, 126, 234, 0.05);
+}
+
+.job-main-info {
+  flex: 1;
+  min-width: 0; /* Prevents overflow */
+}
+
+.job-header-right {
+  display: flex;
+  align-items: center;
+  margin-left: 1rem;
+}
+
+.job-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background-color: #f8f9fa;
+  border-top: 1px solid #e9ecef;
+  gap: 1rem;
+}
+
+.job-match-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.job-match {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 25px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Consistent colors for 70%+ matches */
+.job-match.excellent-match {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  color: white;
+}
+
+.job-match.great-match {
+  background: linear-gradient(135deg, #17a2b8, #28a745);
+  color: white;
+}
+
+.job-match.good-match {
+  background: linear-gradient(135deg, #007bff, #17a2b8);
+  color: white;
+}
+
+.job-match.solid-match {
+  background: linear-gradient(135deg, #6f42c1, #007bff);
+  color: white;
+}
+
+.job-match.low-match {
+  background: linear-gradient(135deg, #6c757d, #495057);
+  color: white;
+}
+
+.apply-btn, .save-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.apply-btn {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+}
+
+.apply-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+}
+
+.save-btn {
+  background: #f8f9fa;
+  color: #495057;
+  border: 2px solid #dee2e6;
+}
+
+.save-btn:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.expand-indicator {
+  transition: transform 0.3s ease;
+  color: #6c757d;
+  font-size: 1.2rem;
+}
+
+.job-card.expanded .expand-indicator {
+  transform: rotate(180deg);
+}
+
+/* Fix any overflow issues */
+.job-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #2c3e50;
+  word-wrap: break-word;
+}
+
+.job-company {
+  margin: 0 0 0.25rem 0;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #667eea;
+}
+
+.job-location, .job-source {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+
+/* Ensure proper spacing */
+.job-card {
+  margin-bottom: 1.5rem;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  background: white;
+}
