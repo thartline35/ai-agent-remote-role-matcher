@@ -221,30 +221,34 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
                 try {
                     const jobs = await source.func(query, filters);
                     
-                    if (jobs.length > 0) {
-                        console.log(`   Raw jobs found: ${jobs.length}`);
+                                         if (jobs.length > 0) {
+                         console.log(`   Raw jobs found: ${jobs.length}`);
+                         
+                         // FIXED: Quick filtering - only basic checks
+                         const filteredJobs = jobs.filter(job => {
+                             if (!job || !job.title || !job.company) return false;
+                             
+                             // Check for duplicates
+                             const key = `${job.title.toLowerCase().trim()}-${job.company.toLowerCase().trim()}`;
+                             if (processedJobKeys.has(key)) return false;
+                             
+                             // Basic remote job check
+                             const isRemote = isQuickRemoteCheck(job);
+                             if (!isRemote) return false;
+                             
+                             processedJobKeys.add(key);
+                             return true;
+                         });
+                         
+                         // Apply user filters (salary, experience, timezone)
+                         const userFilteredJobs = applyJobFilters(filteredJobs, filters);
+                         console.log(`   After user filters: ${userFilteredJobs.length}`);
                         
-                        // FIXED: Quick filtering - only basic checks
-                        const filteredJobs = jobs.filter(job => {
-                            if (!job || !job.title || !job.company) return false;
-                            
-                            // Check for duplicates
-                            const key = `${job.title.toLowerCase().trim()}-${job.company.toLowerCase().trim()}`;
-                            if (processedJobKeys.has(key)) return false;
-                            
-                            // Basic remote job check
-                            const isRemote = isQuickRemoteCheck(job);
-                            if (!isRemote) return false;
-                            
-                            processedJobKeys.add(key);
-                            return true;
-                        });
-                        
-                        console.log(`   After quick filtering: ${filteredJobs.length}`);
-                        
-                        if (filteredJobs.length > 0) {
-                            // REAL AI MATCHING - Only show 70%+ matches
-                            const highMatchJobs = await filterRealHighMatchJobs(filteredJobs, analysis, openai);
+                                                 console.log(`   After quick filtering: ${filteredJobs.length}`);
+                         
+                         if (userFilteredJobs.length > 0) {
+                             // REAL AI MATCHING - Only show 70%+ matches
+                             const highMatchJobs = await filterRealHighMatchJobs(userFilteredJobs, analysis, openai);
                             
                             if (highMatchJobs.length > 0) {
                                 sourceJobs.push(...highMatchJobs);
