@@ -364,15 +364,20 @@ async function filterRealHighMatchJobs(jobs, analysis, openai) {
             try {
                 await new Promise(resolve => setTimeout(resolve, index * 200));
                 
+                console.log(`🔍 Processing job: "${job.title}" from source: "${job.source}"`);
+                
                 // REAL AI analysis using OpenAI
                 const aiMatch = await calculateRealAIJobMatch(job, analysis, openai);
                 
                 if (aiMatch.matchPercentage >= 70) {
-                    return {
+                    const enhancedJob = {
                         ...job,
                         ...aiMatch,
-                        source: job.source
+                        source: job.source || 'Unknown' // Explicitly preserve the source
                     };
+                    
+                    console.log(`✅ Enhanced job created: "${enhancedJob.title}" from "${enhancedJob.source}" with ${enhancedJob.matchPercentage}% match`);
+                    return enhancedJob;
                 }
                 
                 return null;
@@ -540,6 +545,7 @@ async function searchAdzunaJobs(query, filters) {
             company: job.company?.display_name || 'Unknown Company',
             location: job.location?.display_name || 'Remote',
             link: job.redirect_url,
+            source: 'Adzuna', // Explicitly set source
             description: job.description || '',
             salary: formatSalary(job.salary_min, job.salary_max),
             type: job.contract_time || 'Full-time',
@@ -581,6 +587,7 @@ async function searchJSearchRapidAPI(query, filters) {
                 company: job.employer_name,
                 location: job.job_city ? `${job.job_city}, ${job.job_state || job.job_country}` : 'Remote',
                 link: job.job_apply_link || job.job_url || '#',
+                source: 'JSearch-RapidAPI', // Explicitly set source
                 description: job.job_description || '',
                 salary: formatRapidAPISalary(job.job_min_salary, job.job_max_salary),
                 type: job.job_employment_type || 'Full-time',
@@ -616,6 +623,7 @@ async function searchTheMuseJobs(query, filters) {
             company: job.company?.name || 'Unknown Company',
             location: job.locations?.[0]?.name || 'Remote',
             link: job.refs?.landing_page,
+            source: 'TheMuse', // Explicitly set source
             description: job.contents || '',
             salary: 'Salary not specified',
             type: job.type || 'Full-time',
@@ -655,6 +663,7 @@ async function searchRapidAPIJobs(query, filters) {
             company: job.company || 'Unknown Company',
             location: job.location || 'Remote',
             link: job.url,
+            source: 'RapidAPI-Jobs', // Explicitly set source
             description: job.description || '',
             salary: job.salary || 'Salary not specified',
             type: job.jobType || 'Full-time',
@@ -692,6 +701,7 @@ async function searchReedJobs(query, filters) {
             company: job.employerName || 'Unknown Company',
             location: job.locationName || 'Remote',
             link: job.jobUrl,
+            source: 'Reed', // Explicitly set source
             description: job.jobDescription || '',
             salary: job.minimumSalary && job.maximumSalary ? 
                     `£${job.minimumSalary.toLocaleString()} - £${job.maximumSalary.toLocaleString()}` : 
@@ -732,6 +742,7 @@ async function searchTheirstackJobs(query, filters) {
             company: job.company?.name || 'Unknown Company',
             location: job.location || 'Remote',
             link: job.url,
+            source: 'Theirstack', // Explicitly set source
             description: job.description || '',
             salary: formatSalary(job.salary_min, job.salary_max),
             type: job.employment_type || 'Full-time',
