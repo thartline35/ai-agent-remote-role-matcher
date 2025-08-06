@@ -380,13 +380,12 @@ class AIJobMatcher {
         this.searchSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    // FIXED: Enhanced job search with real-time streaming
     async startJobSearch() {
         try {
             this.showLoading(true, 'Initializing job search...');
             this.hideError();
     
-            // FIXED: Reset state for new search
+            // Reset state for new search
             this.jobResults = [];
             this.totalJobs = 0;
             this.displayedJobsCount = 0;
@@ -401,7 +400,7 @@ class AIJobMatcher {
             console.log('Analysis data:', this.resumeAnalysis);
             console.log('Filters:', filters);
             
-            // FIXED: Start streaming request
+            // Start streaming request
             const response = await fetch('/api/search-jobs', {
                 method: 'POST',
                 headers: {
@@ -418,7 +417,7 @@ class AIJobMatcher {
                 throw new Error(errorData.error || `Server error (${response.status})`);
             }
     
-            // FIXED: Handle streaming response
+            // Handle streaming response
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
@@ -433,7 +432,7 @@ class AIJobMatcher {
                         break;
                     }
     
-                    // FIXED: Handle streaming data
+                    // Handle streaming data
                     buffer += decoder.decode(value, { stream: true });
                     const lines = buffer.split('\n');
                     buffer = lines.pop() || '';
@@ -477,7 +476,6 @@ class AIJobMatcher {
         }
     }
 
-    // FIXED: Handle different types of streaming updates
     async handleStreamingUpdate(data) {
         console.log('📨 Handling streaming update:', data.type);
 
@@ -508,7 +506,6 @@ class AIJobMatcher {
         }
     }
 
-    // FIXED: Handle real-time job updates
     async handleJobsFound(data) {
         console.log(`🎯 RECEIVED: ${data.jobs.length} jobs from ${data.source}`);
 
@@ -522,7 +519,7 @@ class AIJobMatcher {
             this.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
-        // FIXED: Display jobs immediately with animation
+        // Display jobs immediately with animation
         data.jobs.forEach((job, index) => {
             setTimeout(() => {
                 const jobCard = this.createEnhancedJobCard(job);
@@ -553,7 +550,6 @@ class AIJobMatcher {
         }
     }
 
-    // FIXED: Handle search completion
     async handleSearchComplete(data) {
         console.log('🏁 Search completed:', data);
 
@@ -571,7 +567,6 @@ class AIJobMatcher {
         console.log(`🎉 COMPLETED: ${this.totalJobs} total jobs found!`);
     }
 
-    // REAL AI MATCHING - Update job statistics with real match data
     updateJobStats() {
         if (this.totalJobsElement) {
             this.totalJobsElement.textContent = this.totalJobs;
@@ -595,7 +590,6 @@ class AIJobMatcher {
         }
     }
 
-    // FIXED: Sort displayed jobs by match percentage
     sortJobsByMatch() {
         const jobCards = Array.from(this.jobsGrid.children);
         
@@ -696,8 +690,11 @@ class AIJobMatcher {
             `;
         }
 
+        // Enhanced salary formatting
+        const formattedSalary = this.formatJobSalary(job.salary);
+
         card.innerHTML = `
-            <div class="job-header" onclick="this.parentElement.classList.toggle('expanded')">
+            <div class="job-header">
                 <div class="job-main-info">
                     <h3 class="job-title">${job.title || 'Job Title Not Available'}</h3>
                     <p class="job-company">${job.company || 'Company Not Available'}</p>
@@ -705,15 +702,23 @@ class AIJobMatcher {
                     <p class="job-source"><i class="fas fa-external-link-alt"></i> Source: ${job.source || 'Unknown'}</p>
                 </div>
                 <div class="job-header-right">
-                    <div class="expand-indicator">
+                    <button class="expand-btn" onclick="this.closest('.job-card').classList.toggle('expanded'); this.querySelector('i').classList.toggle('fa-chevron-down'); this.querySelector('i').classList.toggle('fa-chevron-up');">
                         <i class="fas fa-chevron-down"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="job-always-visible">
+                <div class="job-summary-info">
+                    <p class="job-salary"><i class="fas fa-dollar-sign"></i> ${formattedSalary}</p>
+                    <div class="job-match-display">
+                        <span class="job-match ${matchClass}">${matchPercentage}% Match</span>
                     </div>
                 </div>
             </div>
             
             <div class="job-details collapsed">
-                <div class="job-summary">
-                    <p class="job-salary"><i class="fas fa-dollar-sign"></i> ${job.salary || 'Salary not specified'}</p>
+                <div class="job-additional-info">
                     <p class="job-type"><i class="fas fa-clock"></i> ${job.type || 'Full-time'}</p>
                 </div>
                 
@@ -733,9 +738,6 @@ class AIJobMatcher {
                         <i class="fas fa-bookmark"></i>
                         Save Job
                     </button>
-                    <div class="job-match-badge">
-                        <span class="job-match ${matchClass}">${matchPercentage}% Match</span>
-                    </div>
                 </div>
             </div>
         `;
@@ -743,21 +745,52 @@ class AIJobMatcher {
         return card;
     }
 
+    formatJobSalary(salaryStr) {
+        if (!salaryStr || salaryStr === 'Salary not specified') {
+            return 'Salary not specified';
+        }
+        
+        // Clean up and standardize salary display
+        let cleanSalary = salaryStr.trim();
+        
+        // Handle common formatting improvements
+        if (cleanSalary.includes(' - ')) {
+            return cleanSalary;
+        } else if (cleanSalary.includes('From ')) {
+            return cleanSalary;
+        } else if (cleanSalary.includes('Up to ')) {
+            return cleanSalary;
+        } else if (cleanSalary.match(/^\$?\d+k?\s*-\s*\$?\d+k?$/i)) {
+            // Simple range like "50k-75k" or "$50k-$75k"
+            const parts = cleanSalary.split('-');
+            if (parts.length === 2) {
+                let min = parts[0].trim().replace(/^\$/, '');
+                let max = parts[1].trim().replace(/^\$/, '');
+                
+                // Ensure both have $ prefix
+                if (!min.startsWith('$')) min = '$' + min;
+                if (!max.startsWith('$')) max = '$' + max;
+                
+                return `${min} - ${max}`;
+            }
+        }
+        
+        return cleanSalary;
+    }
+
+    formatSalaryNumber(num) {
+        if (num >= 1000) {
+            return `${Math.round(num / 1000)}k`;
+        }
+        return num.toLocaleString();
+    }
+
     getMatchClass(matchPercentage) {
-        // Consistent colors for 70%+ threshold
         if (matchPercentage >= 85) return 'excellent-match';
         if (matchPercentage >= 80) return 'great-match';
         if (matchPercentage >= 75) return 'good-match';
         if (matchPercentage >= 70) return 'solid-match';
-        return 'low-match'; // This shouldn't appear since we filter at 70%
-    }
-
-    getMatchClass(matchPercentage) {
-        if (matchPercentage >= 80) return 'high-match';
-        if (matchPercentage >= 70) return 'good-match';
-        if (matchPercentage >= 60) return 'medium-match';
-        if (matchPercentage >= 45) return 'low-match';
-        return 'very-low-match';
+        return 'low-match';
     }
 
     getMatchReason(job) {
@@ -790,7 +823,7 @@ class AIJobMatcher {
 
     truncateDescription(description) {
         if (description.length <= 300) return description;
-        return description.substring(0, 300) + '... <span class="read-more">[Click to expand]</span>';
+        return description.substring(0, 300) + '...';
     }
 
     clearAllFilters() {
@@ -801,7 +834,7 @@ class AIJobMatcher {
 
         this.currentFilteredJobs = [];
         this.displayedJobsCount = 0;
-        this.displayJobResults();
+        this.displayFilteredResults(this.jobResults);
         
         // Hide clear filters button
         if (this.clearFilters) {
@@ -1001,7 +1034,6 @@ class AIJobMatcher {
     }
 
     loadMoreJobs() {
-        // This function can be enhanced later for pagination
         console.log('Load more jobs functionality');
     }
 
