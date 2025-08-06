@@ -716,41 +716,90 @@ async function searchReedJobs(query, filters) {
     }
 }
 
-// FIXED: Conservative Theirstack function
+// FIXED: Enhanced Theirstack function with better debugging
 async function searchTheirstackJobs(query, filters) {
     const THEIRSTACK_API_KEY = process.env.THEIRSTACK_API_KEY;
-    if (!THEIRSTACK_API_KEY) return [];
+    if (!THEIRSTACK_API_KEY) {
+        console.log('❌ Theirstack credentials missing');
+        return [];
+    }
+
+    // Check if we're close to rate limit
+    if (theirstackUsageCount >= 200) {
+        console.log('🚫 Theirstack rate limit reached - skipping request');
+        return [];
+    }
 
     try {
+        console.log('🔍 Theirstack: Making API request with query:', query);
+        
+        // Track usage BEFORE making request
+        theirstackUsageCount++;
+        console.log(`📊 Theirstack API Usage: ${theirstackUsageCount}/200 (FREE TIER)`);
+        
         const response = await axios.get('https://api.theirstack.com/v1/jobs', {
             params: {
-                query: query,
+                q: query, // Changed from 'query' to 'q' - common API parameter name
                 remote: true,
-                limit: 15 // Very conservative for free tier
+                limit: 20,
+                page: 1,
+                sort: 'relevance'
             },
             headers: {
                 'Authorization': `Bearer ${THEIRSTACK_API_KEY}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'User-Agent': 'AI-Job-Matcher/1.0'
             },
-            timeout: 8000
+            timeout: 10000
         });
 
-        if (!response.data?.data) return [];
+        console.log(`✅ Theirstack API responded with status: ${response.status}`);
+        console.log(`📊 Theirstack response data structure:`, Object.keys(response.data || {}));
+        console.log(`📊 Theirstack jobs count: ${response.data?.data?.length || 0}`);
 
-        return response.data.data.map(job => ({
-            title: job.title,
-            company: job.company?.name || 'Unknown Company',
-            location: job.location || 'Remote',
-            link: job.url,
-            source: 'Theirstack', // Explicitly set source
-            description: job.description || '',
-            salary: formatSalary(job.salary_min, job.salary_max),
-            type: job.employment_type || 'Full-time',
-            datePosted: job.posted_at || new Date().toISOString()
-        }));
+        if (!response.data?.data) {
+            console.log('⚠️ Theirstack: No data field in response');
+            console.log('🔍 Full response:', JSON.stringify(response.data, null, 2));
+            return [];
+        }
+
+        const jobs = response.data.data.map(job => {
+            console.log(`🔧 Processing Theirstack job: "${job.title}" from ${job.company?.name}`);
+            return {
+                title: job.title,
+                company: job.company?.name || 'Unknown Company',
+                location: job.location || 'Remote',
+                link: job.url || job.apply_url || '#',
+                source: 'Theirstack',
+                description: job.description || job.summary || '',
+                salary: formatSalary(job.salary_min, job.salary_max),
+                type: job.employment_type || job.job_type || 'Full-time',
+                datePosted: job.posted_at || job.created_at || new Date().toISOString()
+            };
+        });
+
+        console.log(`✅ Theirstack processed ${jobs.length} jobs (Usage: ${theirstackUsageCount}/200)`);
+        return jobs;
         
     } catch (error) {
-        console.error('❌ Theirstack error:', error.message);
+        console.error('❌ Theirstack error details:', {
+            message: error.message,
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            url: error.config?.url,
+            params: error.config?.params
+        });
+        
+        if (error.response?.status === 429) {
+            console.error('🚫 Theirstack rate limit hit - FREE TIER limit reached');
+            theirstackUsageCount = 200; // Mark as rate limited
+        } else if (error.response?.status === 401) {
+            console.error('🔑 Theirstack authentication failed - check API key');
+        } else if (error.response?.status === 403) {
+            console.error('🚫 Theirstack access forbidden - check API permissions');
+        }
+        
         return [];
     }
 }
