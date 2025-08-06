@@ -221,7 +221,7 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
                 try {
                     const jobs = await source.func(query, filters);
                     
-                                         if (jobs.length > 0) {
+                                                              if (jobs.length > 0) {
                          console.log(`   Raw jobs found: ${jobs.length}`);
                          
                          // FIXED: Quick filtering - only basic checks
@@ -240,25 +240,27 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
                              return true;
                          });
                          
-                         // Apply user filters (salary, experience, timezone)
-                         const userFilteredJobs = applyJobFilters(filteredJobs, filters);
-                         console.log(`   After user filters: ${userFilteredJobs.length}`);
-                        
-                                                 console.log(`   After quick filtering: ${filteredJobs.length}`);
+                         console.log(`   After quick filtering: ${filteredJobs.length}`);
                          
-                         if (userFilteredJobs.length > 0) {
-                             // REAL AI MATCHING - Only show 70%+ matches
-                             const highMatchJobs = await filterRealHighMatchJobs(userFilteredJobs, analysis, openai);
-                            
-                            if (highMatchJobs.length > 0) {
-                                sourceJobs.push(...highMatchJobs);
-                                allJobs.push(...highMatchJobs);
-                                
-                                // Stream REAL 70%+ matches immediately
-                                const sourceProgress = sourceStartProgress + ((i + 1) / maxQueries) * source.weight;
-                                onJobFound(highMatchJobs, source.name, Math.round(sourceProgress));
-                            }
-                        }
+                                                  if (filteredJobs.length > 0) {
+                             // Apply user filters (salary, experience, timezone) BEFORE AI matching
+                             const userFilteredJobs = applyJobFilters(filteredJobs, filters);
+                             console.log(`   After user filters: ${userFilteredJobs.length}`);
+                             
+                             if (userFilteredJobs.length > 0) {
+                                 // REAL AI MATCHING - Only show 70%+ matches
+                                 const highMatchJobs = await filterRealHighMatchJobs(userFilteredJobs, analysis, openai);
+                                 
+                                 if (highMatchJobs.length > 0) {
+                                     sourceJobs.push(...highMatchJobs);
+                                     allJobs.push(...highMatchJobs);
+                                     
+                                     // Stream REAL 70%+ matches immediately
+                                     const sourceProgress = sourceStartProgress + ((i + 1) / maxQueries) * source.weight;
+                                     onJobFound(highMatchJobs, source.name, Math.round(sourceProgress));
+                                 }
+                             }
+                         }
                     } else {
                         console.log(`   No jobs returned from ${source.name} for "${query}"`);
                     }
