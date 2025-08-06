@@ -230,19 +230,17 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
                         console.log(`   After quick filtering: ${filteredJobs.length}`);
                         
                         if (filteredJobs.length > 0) {
-                            // FIXED: Add basic match percentage quickly
-                            const jobsWithQuickMatch = filteredJobs.map(job => ({
-                                ...job,
-                                matchPercentage: calculateQuickMatch(job, analysis),
-                                source: source.name
-                            }));
+                            // REAL AI MATCHING - Only show 70%+ matches
+                            const highMatchJobs = await filterRealHighMatchJobs(filteredJobs, analysis, openai);
                             
-                            sourceJobs.push(...jobsWithQuickMatch);
-                            allJobs.push(...jobsWithQuickMatch);
-                            
-                            // FIXED: Stream jobs immediately
-                            const sourceProgress = sourceStartProgress + ((i + 1) / maxQueries) * source.weight;
-                            onJobFound(jobsWithQuickMatch, source.name, Math.round(sourceProgress));
+                            if (highMatchJobs.length > 0) {
+                                sourceJobs.push(...highMatchJobs);
+                                allJobs.push(...highMatchJobs);
+                                
+                                // Stream REAL 70%+ matches immediately
+                                const sourceProgress = sourceStartProgress + ((i + 1) / maxQueries) * source.weight;
+                                onJobFound(highMatchJobs, source.name, Math.round(sourceProgress));
+                            }
                         }
                     }
                 } catch (queryError) {
@@ -283,85 +281,190 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
     };
 }
 
-// FIXED: Quick remote job check (faster than before)
+// FIXED: Enhanced remote job check (stricter filtering)
 function isQuickRemoteCheck(job) {
     if (!job) return false;
     
     const title = (job.title || '').toLowerCase();
     const location = (job.location || '').toLowerCase();
-    const description = (job.description || '').toLowerCase().substring(0, 500); // Only check first 500 chars
+    const description = (job.description || '').toLowerCase().substring(0, 800);
     
-    const allText = `${title} ${location} ${description}`;
+    // Strong remote indicators
+    const strongRemoteKeywords = [
+        'remote', 'work from home', 'wfh', 'anywhere', 'distributed',
+        'fully remote', '100% remote', 'remote-first', 'remote only'
+    ];
     
-    // Quick remote indicators
-    const remoteKeywords = ['remote', 'work from home', 'wfh', 'anywhere', 'distributed'];
-    const hasRemote = remoteKeywords.some(keyword => allText.includes(keyword));
+    // Check location first (most reliable)
+    const hasRemoteLocation = location.includes('remote') || 
+                             location.includes('anywhere') || 
+                             location.includes('worldwide') ||
+                             location.includes('global') ||
+                             location === 'flexible / remote';
     
-    // Quick exclusions
-    const nonRemoteKeywords = ['on-site only', 'office required', 'relocation required'];
-    const hasNonRemote = nonRemoteKeywords.some(keyword => allText.includes(keyword));
+    // Check title and description
+    const hasRemoteInContent = strongRemoteKeywords.some(keyword => 
+        title.includes(keyword) || description.includes(keyword)
+    );
     
-    return hasRemote && !hasNonRemote;
+    // Must have clear remote indicators
+    if (!hasRemoteLocation && !hasRemoteInContent) {
+        return false;
+    }
+    
+    // Exclude jobs with specific city requirements (unless clearly remote)
+    const cityExclusions = [
+        'seattle', 'boston', 'san francisco', 'new york', 'chicago', 
+        'los angeles', 'atlanta', 'denver', 'austin', 'portland',
+        'must be located in', 'based in', 'office in', 'headquarters'
+    ];
+    
+    const hasLocationRestriction = cityExclusions.some(city => {
+        return location.includes(city) || description.includes(city);
+    });
+    
+    // If there's a location restriction, make sure it's still clearly remote
+    if (hasLocationRestriction && !hasRemoteLocation) {
+        return false;
+    }
+    
+    // Exclude jobs with strict on-site requirements
+    const nonRemoteKeywords = [
+        'on-site only', 'onsite only', 'office required', 'relocation required',
+        'must relocate', 'local candidates only', 'no remote work',
+        'in-person required', 'office based only'
+    ];
+    
+    const hasNonRemote = nonRemoteKeywords.some(keyword => 
+        description.includes(keyword) || title.includes(keyword)
+    );
+    
+    if (hasNonRemote) {
+        return false;
+    }
+    
+    console.log(`Remote check for "${job.title}": location="${location}" -> ${hasRemoteLocation || hasRemoteInContent}`);
+    
+    return hasRemoteLocation || hasRemoteInContent;
 }
 
-// FIXED: Quick match calculation (faster than AI analysis)
-function calculateQuickMatch(job, analysis) {
-    if (!job) return 0;
+// REAL AI MATCHING - Filter for 70%+ matches using OpenAI
+async function filterRealHighMatchJobs(jobs, analysis, openai) {
+    const highMatchJobs = [];
+    const batchSize = 3; // Small batches for real AI analysis
     
-    const jobText = `${job.title || ''} ${job.description || ''}`.toLowerCase();
-    let score = 0;
-    let maxScore = 0;
-    
-    // Technical skills match (40% weight)
-    const techSkills = analysis.technicalSkills || [];
-    if (techSkills.length > 0) {
-        let matchCount = 0;
-        techSkills.slice(0, 10).forEach(skill => { // Only check top 10 skills for speed
-            const skillStr = String(skill || '').toLowerCase();
-            if (skillStr.length > 2 && jobText.includes(skillStr)) {
-                matchCount++;
+    for (let i = 0; i < jobs.length; i += batchSize) {
+        const batch = jobs.slice(i, i + batchSize);
+        
+        const batchPromises = batch.map(async (job, index) => {
+            if (!job || !job.title || !job.company) {
+                return null;
+            }
+            
+            try {
+                await new Promise(resolve => setTimeout(resolve, index * 200));
+                
+                // REAL AI analysis using OpenAI
+                const aiMatch = await calculateRealAIJobMatch(job, analysis, openai);
+                
+                if (aiMatch.matchPercentage >= 70) {
+                    return {
+                        ...job,
+                        ...aiMatch,
+                        source: job.source
+                    };
+                }
+                
+                return null;
+
+            } catch (error) {
+                console.error(`AI match analysis failed for "${job.title}":`, error.message);
+                return null;
             }
         });
-        score += (matchCount / Math.min(techSkills.length, 10)) * 40;
-        maxScore += 40;
-    }
-    
-    // Work experience match (35% weight)
-    const workExp = analysis.workExperience || [];
-    if (workExp.length > 0) {
-        let roleMatch = 0;
-        const jobTitle = job.title.toLowerCase();
+
+        const batchResults = await Promise.all(batchPromises);
+        const validResults = batchResults.filter(job => job !== null);
+        highMatchJobs.push(...validResults);
         
-        workExp.slice(0, 5).forEach(exp => { // Only check top 5 for speed
-            const expStr = String(exp || '').toLowerCase();
-            const expWords = expStr.split(' ').filter(w => w.length > 2);
-            
-            expWords.forEach(word => {
-                if (jobTitle.includes(word)) {
-                    roleMatch += 1;
-                }
-            });
-        });
-        
-        score += Math.min(roleMatch * 5, 35); // Cap at 35
-        maxScore += 35;
-    }
-    
-    // Industry/keyword match (25% weight)
-    const industries = analysis.industries || [];
-    const responsibilities = analysis.responsibilities || [];
-    
-    [...industries.slice(0, 3), ...responsibilities.slice(0, 5)].forEach(item => {
-        const itemStr = String(item || '').toLowerCase();
-        if (itemStr.length > 3 && jobText.includes(itemStr)) {
-            score += 3;
+        if (i + batchSize < jobs.length) {
+            await new Promise(resolve => setTimeout(resolve, 300));
         }
-    });
-    maxScore += 25;
+    }
     
-    const finalScore = maxScore > 0 ? Math.round((score / maxScore) * 100) : 50;
-    return Math.min(Math.max(finalScore, 45), 95); // Ensure score is between 45-95
+    return highMatchJobs;
 }
+
+// REAL AI-powered COMPREHENSIVE job matching using OpenAI
+async function calculateRealAIJobMatch(job, analysis, openai) {
+    const response = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [{
+            role: "user",
+            content: `Analyze this REAL job for COMPREHENSIVE OVERALL MATCH against the candidate's complete profile.
+
+REAL JOB: ${job.title} at ${job.company}
+Location: ${job.location}
+Description: ${job.description.substring(0, 1000)}
+
+COMPLETE CANDIDATE PROFILE:
+- Technical Skills: ${analysis.technicalSkills?.slice(0, 15).join(', ') || 'None'}
+- Work Experience: ${analysis.workExperience?.slice(0, 8).join(', ') || 'None'}
+- Industries: ${analysis.industries?.slice(0, 5).join(', ') || 'None'}
+- Responsibilities: ${analysis.responsibilities?.slice(0, 8).join(', ') || 'None'}
+- Qualifications: ${analysis.qualifications?.slice(0, 5).join(', ') || 'None'}
+- Education: ${analysis.education?.slice(0, 5).join(', ') || 'None'}
+- Seniority Level: ${analysis.seniorityLevel || 'Unknown'}
+
+CRITICAL: Provide a COMPREHENSIVE OVERALL MATCH assessment considering ALL aspects together:
+- How well do their technical skills align with job requirements?
+- How well does their work experience match the role?
+- Does their seniority level fit the position level?
+- Do their past responsibilities prepare them for this role?
+- Would they be successful in this specific job at this specific company?
+- Is this a realistic career move for them?
+
+The matchPercentage should reflect OVERALL fit for the COMPLETE role, not just individual skill matches.
+
+Return ONLY JSON:
+{
+  "matchPercentage": number (0-100, representing OVERALL comprehensive fit),
+  "matchedTechnicalSkills": ["skill1", "skill2"],
+  "matchedSoftSkills": ["skill1", "skill2"],
+  "matchedExperience": ["exp1", "exp2"],
+  "missingRequirements": ["req1", "req2"],
+  "reasoning": "explain the OVERALL comprehensive match assessment",
+  "industryMatch": number (0-100),
+  "seniorityMatch": number (0-100),
+  "growthPotential": "low|medium|high"
+}`
+        }],
+        temperature: 0.1,
+        max_tokens: 500
+    });
+
+    const content = response.choices[0].message.content.trim();
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    
+    if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+            matchPercentage: parsed.matchPercentage || 0,
+            matchedTechnicalSkills: parsed.matchedTechnicalSkills || [],
+            matchedSoftSkills: parsed.matchedSoftSkills || [],
+            matchedExperience: parsed.matchedExperience || [],
+            missingRequirements: parsed.missingRequirements || [],
+            reasoning: parsed.reasoning || 'Comprehensive AI analysis completed',
+            industryMatch: parsed.industryMatch || 0,
+            seniorityMatch: parsed.seniorityMatch || 0,
+            growthPotential: parsed.growthPotential || 'medium'
+        };
+    } else {
+        throw new Error('No valid JSON found in AI response');
+    }
+}
+
+// ===== SIMPLIFIED API SEARCH FUNCTIONS - REAL DATA ONLY =====
 
 // FIXED: Generate focused search queries (fewer, more targeted)
 function generateFocusedSearchQueries(analysis) {
