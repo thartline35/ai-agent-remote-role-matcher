@@ -7,6 +7,9 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Theirstack usage tracking (free tier has 200 request limit)
+let theirstackUsageCount = 0;
+
 export default async function handler(req, res) {
     // Enable CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -170,13 +173,13 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
     const processedJobKeys = new Set();
     let currentProgress = 0;
 
-    // FIXED: Optimized source configuration
+    // FIXED: Optimized source configuration with proper order
     const sources = [
+        { name: 'JSearch-RapidAPI', func: searchJSearchRapidAPI, weight: 20 },
         { name: 'Adzuna', func: searchAdzunaJobs, weight: 20 },
-        { name: 'JSearch-RapidAPI', func: searchJSearchRapidAPI, weight: 25 },
         { name: 'TheMuse', func: searchTheMuseJobs, weight: 20 },
+        { name: 'Reed', func: searchReedJobs, weight: 15 },
         { name: 'RapidAPI-Jobs', func: searchRapidAPIJobs, weight: 15 },
-        { name: 'Reed', func: searchReedJobs, weight: 10 },
         { name: 'Theirstack', func: searchTheirstackJobs, weight: 10 }
     ];
 
@@ -197,9 +200,19 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
         onProgress(`Searching ${source.name}...`, sourceStartProgress);
         
         try {
+            // Check if this source has required API keys
+            const hasApiKey = checkApiKeyForSource(source.name);
+            if (!hasApiKey) {
+                console.log(`❌ ${source.name}: Missing API key - skipping`);
+                currentProgress = sourceEndProgress;
+                continue;
+            }
+            
             // FIXED: Use fewer queries per source (2-3 max) for speed
             const maxQueries = source.name === 'Theirstack' ? 2 : 3;
             const sourceJobs = [];
+            
+            console.log(`📝 ${source.name}: Processing ${maxQueries} queries`);
             
             for (let i = 0; i < Math.min(queries.length, maxQueries); i++) {
                 const query = queries[i];
@@ -242,6 +255,8 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
                                 onJobFound(highMatchJobs, source.name, Math.round(sourceProgress));
                             }
                         }
+                    } else {
+                        console.log(`   No jobs returned from ${source.name} for "${query}"`);
                     }
                 } catch (queryError) {
                     console.error(`   ❌ ${source.name} failed for "${query}":`, queryError.message);
@@ -469,7 +484,42 @@ Return ONLY JSON:
     }
 }
 
-// ===== SIMPLIFIED API SEARCH FUNCTIONS - REAL DATA ONLY =====
+// Check if API key exists for a source
+function checkApiKeyForSource(sourceName) {
+    switch (sourceName) {
+        case 'Theirstack':
+            const hasTheirstack = !!process.env.THEIRSTACK_API_KEY;
+            console.log(`🔑 Theirstack API key check: ${hasTheirstack ? 'EXISTS' : 'MISSING'}`);
+            return hasTheirstack;
+            
+        case 'Adzuna':
+            const hasAdzuna = !!(process.env.ADZUNA_APP_ID && process.env.ADZUNA_API_KEY);
+            console.log(`🔑 Adzuna API key check: ${hasAdzuna ? 'EXISTS' : 'MISSING'}`);
+            return hasAdzuna;
+            
+        case 'TheMuse':
+            const hasTheMuse = !!process.env.THEMUSE_API_KEY;
+            console.log(`🔑 TheMuse API key check: ${hasTheMuse ? 'EXISTS' : 'MISSING'}`);
+            return hasTheMuse;
+            
+        case 'Reed':
+            const hasReed = !!process.env.REED_API_KEY;
+            console.log(`🔑 Reed API key check: ${hasReed ? 'EXISTS' : 'MISSING'}`);
+            return hasReed;
+            
+        case 'JSearch-RapidAPI':
+        case 'RapidAPI-Jobs':
+            const hasRapidAPI = !!process.env.RAPIDAPI_KEY;
+            console.log(`🔑 ${sourceName} API key check: ${hasRapidAPI ? 'EXISTS' : 'MISSING'}`);
+            return hasRapidAPI;
+            
+        default:
+            console.log(`🔑 Unknown source: ${sourceName}`);
+            return false;
+    }
+}
+
+// ===== JOB SEARCH FUNCTIONS =====
 
 // FIXED: Generate focused search queries (fewer, more targeted)
 function generateFocusedSearchQueries(analysis) {
@@ -515,45 +565,82 @@ function generateFocusedSearchQueries(analysis) {
 
 // ===== SIMPLIFIED API SEARCH FUNCTIONS =====
 
-// FIXED: Simplified Adzuna function
+// FIXED: Enhanced Adzuna function with proper App ID + API Key usage
 async function searchAdzunaJobs(query, filters) {
     const ADZUNA_APP_ID = process.env.ADZUNA_APP_ID;
     const ADZUNA_API_KEY = process.env.ADZUNA_API_KEY;
     
     if (!ADZUNA_APP_ID || !ADZUNA_API_KEY) {
-        console.log('❌ Adzuna credentials missing');
+        console.log('❌ Adzuna credentials missing:', {
+            appId: ADZUNA_APP_ID ? 'EXISTS' : 'MISSING',
+            apiKey: ADZUNA_API_KEY ? 'EXISTS' : 'MISSING'
+        });
         return [];
     }
 
     try {
+        console.log('🔍 Adzuna: Making API request with query:', query);
+        console.log('🔑 Adzuna: Using App ID:', ADZUNA_APP_ID ? `${ADZUNA_APP_ID.substring(0, 8)}...` : 'MISSING');
+        
         const response = await axios.get('https://api.adzuna.com/v1/api/jobs/us/search/1', {
             params: {
                 app_id: ADZUNA_APP_ID,
                 app_key: ADZUNA_API_KEY,
                 what: query,
                 where: 'remote',
-                results_per_page: 25, // Reduced for speed
-                sort_by: 'relevance'
+                results_per_page: 25,
+                sort_by: 'relevance',
+                title_only: 1 // Focus on title matches for better relevance
             },
-            timeout: 8000 // Shorter timeout
+            timeout: 15000
         });
 
-        if (!response.data?.results) return [];
+        console.log(`✅ Adzuna API responded with status: ${response.status}`);
+        console.log(`📊 Adzuna response structure:`, Object.keys(response.data || {}));
+        console.log(`📊 Adzuna jobs count: ${response.data?.results?.length || 0}`);
 
-        return response.data.results.map(job => ({
-            title: job.title,
-            company: job.company?.display_name || 'Unknown Company',
-            location: job.location?.display_name || 'Remote',
-            link: job.redirect_url,
-            source: 'Adzuna', // Explicitly set source
-            description: job.description || '',
-            salary: formatSalary(job.salary_min, job.salary_max),
-            type: job.contract_time || 'Full-time',
-            datePosted: job.created || new Date().toISOString()
-        }));
+        if (!response.data?.results) {
+            console.log('⚠️ Adzuna: No results field in response');
+            console.log('🔍 Full response:', JSON.stringify(response.data, null, 2));
+            return [];
+        }
+
+        const jobs = response.data.results.map(job => {
+            console.log(`🔧 Processing Adzuna job: "${job.title}" from ${job.company?.display_name}`);
+            return {
+                title: job.title,
+                company: job.company?.display_name || 'Unknown Company',
+                location: job.location?.display_name || 'Remote',
+                link: job.redirect_url,
+                source: 'Adzuna',
+                description: job.description || '',
+                salary: formatSalary(job.salary_min, job.salary_max),
+                type: job.contract_time || 'Full-time',
+                datePosted: job.created || new Date().toISOString()
+            };
+        });
+
+        console.log(`✅ Adzuna processed ${jobs.length} jobs`);
+        return jobs;
         
     } catch (error) {
-        console.error('❌ Adzuna error:', error.message);
+        console.error('❌ Adzuna error details:', {
+            message: error.message,
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data,
+            url: error.config?.url,
+            params: error.config?.params
+        });
+        
+        if (error.response?.status === 429) {
+            console.error('🚫 Adzuna rate limit hit');
+        } else if (error.response?.status === 401) {
+            console.error('🔑 Adzuna authentication failed - check App ID and API Key');
+        } else if (error.response?.status === 403) {
+            console.error('🚫 Adzuna access forbidden - check API permissions');
+        }
+        
         return [];
     }
 }
@@ -716,7 +803,7 @@ async function searchReedJobs(query, filters) {
     }
 }
 
-// FIXED: Enhanced Theirstack function with better debugging
+// FIXED: Theirstack API with correct POST format and JSON body
 async function searchTheirstackJobs(query, filters) {
     const THEIRSTACK_API_KEY = process.env.THEIRSTACK_API_KEY;
     if (!THEIRSTACK_API_KEY) {
@@ -731,50 +818,79 @@ async function searchTheirstackJobs(query, filters) {
     }
 
     try {
-        console.log('🔍 Theirstack: Making API request with query:', query);
+        console.log('🔍 Theirstack: Making POST request with query:', query);
+        console.log('🔑 Theirstack: Using API key:', THEIRSTACK_API_KEY ? `${THEIRSTACK_API_KEY.substring(0, 8)}...` : 'MISSING');
         
         // Track usage BEFORE making request
         theirstackUsageCount++;
         console.log(`📊 Theirstack API Usage: ${theirstackUsageCount}/200 (FREE TIER)`);
         
-        const response = await axios.get('https://api.theirstack.com/v1/jobs', {
-            params: {
-                q: query, // Changed from 'query' to 'q' - common API parameter name
-                remote: true,
-                limit: 20,
-                page: 1,
-                sort: 'relevance'
-            },
+        // Correct POST request with JSON body
+        const requestBody = {
+            page: 0,
+            limit: 25,
+            job_country_code_or: ["US"],
+            posted_at_max_age_days: 30,
+            // Add search terms if we can find where they go
+            search_terms: query,
+            remote_only: true
+        };
+        
+        console.log('📦 Theirstack request body:', JSON.stringify(requestBody, null, 2));
+        
+        const response = await axios.post('https://api.theirstack.com/v1/jobs/search', requestBody, {
             headers: {
-                'Authorization': `Bearer ${THEIRSTACK_API_KEY}`,
                 'Content-Type': 'application/json',
+                'Authorization': `Bearer ${THEIRSTACK_API_KEY}`,
+                'Accept': 'application/json',
                 'User-Agent': 'AI-Job-Matcher/1.0'
             },
-            timeout: 10000
+            timeout: 15000
         });
 
         console.log(`✅ Theirstack API responded with status: ${response.status}`);
-        console.log(`📊 Theirstack response data structure:`, Object.keys(response.data || {}));
-        console.log(`📊 Theirstack jobs count: ${response.data?.data?.length || 0}`);
+        console.log(`📊 Theirstack response structure:`, Object.keys(response.data || {}));
+        console.log(`📊 Raw response sample:`, JSON.stringify(response.data, null, 2).substring(0, 500) + '...');
 
-        if (!response.data?.data) {
-            console.log('⚠️ Theirstack: No data field in response');
-            console.log('🔍 Full response:', JSON.stringify(response.data, null, 2));
+        // Handle the response structure
+        let jobsData = null;
+        if (response.data?.jobs) {
+            jobsData = response.data.jobs;
+        } else if (response.data?.data) {
+            jobsData = response.data.data;
+        } else if (response.data?.results) {
+            jobsData = response.data.results;
+        } else if (Array.isArray(response.data)) {
+            jobsData = response.data;
+        }
+
+        if (!jobsData || !Array.isArray(jobsData)) {
+            console.log('⚠️ Theirstack: No recognizable jobs array in response');
+            console.log('🔍 Full response structure:', JSON.stringify(response.data, null, 2));
             return [];
         }
 
-        const jobs = response.data.data.map(job => {
-            console.log(`🔧 Processing Theirstack job: "${job.title}" from ${job.company?.name}`);
+        console.log(`📊 Theirstack jobs found: ${jobsData.length}`);
+
+        const jobs = jobsData.map((job, index) => {
+            console.log(`🔧 Processing Theirstack job ${index + 1}:`, {
+                title: job.title || job.name,
+                company: job.company?.name || job.company_name,
+                location: job.location || job.job_location
+            });
+            
             return {
-                title: job.title,
-                company: job.company?.name || 'Unknown Company',
-                location: job.location || 'Remote',
-                link: job.url || job.apply_url || '#',
+                title: job.title || job.name || job.job_title || 'Unknown Title',
+                company: job.company?.name || job.company_name || job.employer || job.company || 'Unknown Company',
+                location: job.location || job.job_location || job.remote || 'Remote',
+                link: job.url || job.apply_url || job.job_url || job.link || '#',
                 source: 'Theirstack',
-                description: job.description || job.summary || '',
-                salary: formatSalary(job.salary_min, job.salary_max),
-                type: job.employment_type || job.job_type || 'Full-time',
-                datePosted: job.posted_at || job.created_at || new Date().toISOString()
+                description: job.description || job.summary || job.job_description || '',
+                salary: job.salary_min || job.salary_max ? 
+                       formatSalary(job.salary_min || job.min_salary, job.salary_max || job.max_salary) : 
+                       'Salary not specified',
+                type: job.employment_type || job.job_type || job.type || 'Full-time',
+                datePosted: job.posted_at || job.created_at || job.date_posted || new Date().toISOString()
             };
         });
 
@@ -788,16 +904,18 @@ async function searchTheirstackJobs(query, filters) {
             statusText: error.response?.statusText,
             data: error.response?.data,
             url: error.config?.url,
-            params: error.config?.params
+            requestBody: error.config?.data
         });
         
         if (error.response?.status === 429) {
             console.error('🚫 Theirstack rate limit hit - FREE TIER limit reached');
-            theirstackUsageCount = 200; // Mark as rate limited
+            theirstackUsageCount = 200;
         } else if (error.response?.status === 401) {
             console.error('🔑 Theirstack authentication failed - check API key');
         } else if (error.response?.status === 403) {
             console.error('🚫 Theirstack access forbidden - check API permissions');
+        } else if (error.response?.status === 400) {
+            console.error('📦 Theirstack bad request - check request body format');
         }
         
         return [];
