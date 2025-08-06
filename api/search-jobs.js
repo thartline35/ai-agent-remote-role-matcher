@@ -966,3 +966,135 @@ function formatRapidAPISalary(minSalary, maxSalary) {
     
     return formatSalary(min, max);
 }
+
+// Helper function to get salary threshold from filter string
+function getSalaryThreshold(salaryFilter) {
+    const thresholds = {
+        '50k': 50000,
+        '75k': 75000,
+        '100k': 100000,
+        '125k': 125000,
+        '150k': 150000
+    };
+    return thresholds[salaryFilter] || 0;
+}
+
+// Helper function to extract salary numbers from salary string
+function extractSalaryNumbersFromString(salaryStr) {
+    if (!salaryStr || salaryStr === 'Salary not specified') {
+        return { min: 0, max: 0 };
+    }
+    
+    const salary = salaryStr.toLowerCase();
+    let min = 0, max = 0;
+    
+    // Remove common currency symbols and text
+    const cleanSalary = salary.replace(/[$£€,]/g, '');
+    
+    // Look for salary patterns
+    const rangeMatch = cleanSalary.match(/(\d+)(?:k|,000)?\s*[-–to]\s*(\d+)(?:k|,000)?/);
+    const singleMatch = cleanSalary.match(/(\d+)(?:k|,000)?/);
+    const fromMatch = cleanSalary.match(/from\s+(\d+)(?:k|,000)?/);
+    const upToMatch = cleanSalary.match(/up\s+to\s+(\d+)(?:k|,000)?/);
+    
+    if (rangeMatch) {
+        // Range: "50k - 75k" or "50,000 - 75,000"
+        min = parseInt(rangeMatch[1]);
+        max = parseInt(rangeMatch[2]);
+        
+        // Handle k notation
+        if (salary.includes('k') || min < 1000) {
+            min *= 1000;
+            max *= 1000;
+        }
+    } else if (fromMatch) {
+        // "From 50k"
+        min = parseInt(fromMatch[1]);
+        if (salary.includes('k') || min < 1000) {
+            min *= 1000;
+        }
+        max = min; // Use same value for comparison
+    } else if (upToMatch) {
+        // "Up to 75k"
+        max = parseInt(upToMatch[1]);
+        if (salary.includes('k') || max < 1000) {
+            max *= 1000;
+        }
+        min = max; // Use same value for comparison
+    } else if (singleMatch) {
+        // Single number "50k" or "50000"
+        const num = parseInt(singleMatch[1]);
+        if (salary.includes('k') || num < 1000) {
+            min = max = num * 1000;
+        } else {
+            min = max = num;
+        }
+    }
+    
+    return { min, max };
+}
+
+// Apply job filters
+function applyJobFilters(jobs, filters) {
+    if (!filters || Object.keys(filters).length === 0) {
+        return jobs;
+    }
+
+    let filteredJobs = [...jobs];
+
+    // Apply salary filter
+    if (filters.salary && filters.salary !== '') {
+        const salaryThreshold = getSalaryThreshold(filters.salary);
+        if (salaryThreshold > 0) {
+            filteredJobs = filteredJobs.filter(job => {
+                const salaryNumbers = extractSalaryNumbersFromString(job.salary);
+                return salaryNumbers.min >= salaryThreshold || salaryNumbers.max >= salaryThreshold;
+            });
+        }
+    }
+
+    // Apply experience filter
+    if (filters.experience && filters.experience !== '') {
+        filteredJobs = filteredJobs.filter(job => {
+            const title = job.title.toLowerCase();
+            const description = (job.description || '').toLowerCase();
+            
+            if (filters.experience === 'entry') {
+                return title.includes('junior') || title.includes('entry') || title.includes('associate') || 
+                       description.includes('entry level') || description.includes('junior');
+            } else if (filters.experience === 'mid') {
+                return !title.includes('senior') && !title.includes('lead') && !title.includes('principal') &&
+                       !title.includes('junior') && !title.includes('entry') && !title.includes('director');
+            } else if (filters.experience === 'senior') {
+                return title.includes('senior') || title.includes('lead') || title.includes('principal') ||
+                       description.includes('senior') || description.includes('5+ years');
+            } else if (filters.experience === 'lead') {
+                return title.includes('lead') || title.includes('manager') || title.includes('principal') || 
+                       title.includes('architect') || title.includes('director') || title.includes('head of');
+            }
+            return true;
+        });
+    }
+
+    // Apply timezone filter
+    if (filters.timezone && filters.timezone !== '') {
+        filteredJobs = filteredJobs.filter(job => {
+            const description = (job.description || '').toLowerCase();
+            const location = (job.location || '').toLowerCase();
+            
+            if (filters.timezone === 'us-only') {
+                return description.includes('us') || description.includes('united states') || 
+                       location.includes('us') || description.includes('est') || description.includes('pst');
+            } else if (filters.timezone === 'global') {
+                return description.includes('global') || description.includes('worldwide') || 
+                       description.includes('international') || description.includes('any timezone');
+            } else if (filters.timezone === 'europe') {
+                return description.includes('europe') || description.includes('eu') || 
+                       description.includes('cet') || description.includes('gmt');
+            }
+            return true;
+        });
+    }
+
+    return filteredJobs;
+}
