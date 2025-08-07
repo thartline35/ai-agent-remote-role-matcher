@@ -241,15 +241,24 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
                         
                         // Quick filtering - only basic checks
                         const filteredJobs = jobs.filter(job => {
-                            if (!job || !job.title || !job.company) return false;
+                            if (!job || !job.title || !job.company) {
+                                console.log(`   ❌ ${source.name}: Skipping job with missing title/company`);
+                                return false;
+                            }
                             
                             // Check for duplicates
                             const key = `${job.title.toLowerCase().trim()}-${job.company.toLowerCase().trim()}`;
-                            if (processedJobKeys.has(key)) return false;
+                            if (processedJobKeys.has(key)) {
+                                console.log(`   ❌ ${source.name}: Skipping duplicate job "${job.title}"`);
+                                return false;
+                            }
                             
                             // Basic remote job check
                             const isRemote = isQuickRemoteCheck(job);
-                            if (!isRemote) return false;
+                            if (!isRemote) {
+                                console.log(`   ❌ ${source.name}: Skipping non-remote job "${job.title}" (location: ${job.location})`);
+                                return false;
+                            }
                             
                             processedJobKeys.add(key);
                             return true;
@@ -281,6 +290,10 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
                                 );
                                 
                                 console.log(`   🎯 AI matched: ${aiMatchedJobs.length} jobs with 70%+ match`);
+                                if (aiMatchedJobs.length === 0 && userFilteredJobs.length > 0) {
+                                    console.log(`   ⚠️ ${source.name}: All ${userFilteredJobs.length} jobs failed AI matching (below 70% threshold)`);
+                                    console.log(`   📋 Sample jobs that failed: ${userFilteredJobs.slice(0, 3).map(j => j.title).join(', ')}`);
+                                }
                                 
                                 if (aiMatchedJobs.length > 0) {
                                     sourceJobs.push(...aiMatchedJobs);
@@ -455,6 +468,7 @@ async function filterRealHighMatchJobsWithStreaming(jobs, analysis, openai, proc
                 // REAL AI analysis using OpenAI
                 const aiMatch = await calculateRealAIJobMatch(job, analysis, openai);
                 
+                // FIX: Use 70% threshold as required (changed from 50%)
                 if (aiMatch.matchPercentage >= 70) {
                     const enhancedJob = {
                         ...job,
@@ -464,6 +478,8 @@ async function filterRealHighMatchJobsWithStreaming(jobs, analysis, openai, proc
                     
                     console.log(`✅ AI Match: "${enhancedJob.title}" with ${enhancedJob.matchPercentage}% match`);
                     return enhancedJob;
+                } else {
+                    console.log(`❌ AI filtered out: "${job.title}" from "${job.source}" with ${aiMatch.matchPercentage}% match (below 70% threshold)`);
                 }
                 
                 return null;
@@ -599,7 +615,26 @@ function generateFocusedSearchQueries(analysis) {
     // Primary: Top work experience (max 3)
     if (analysis.workExperience && analysis.workExperience.length > 0) {
         analysis.workExperience.slice(0, 3).forEach(exp => {
-            const expStr = String(exp || '').toLowerCase();
+            // Fix: Handle both string and object cases properly
+            let expStr = '';
+            if (typeof exp === 'string') {
+                expStr = exp.toLowerCase();
+            } else if (exp && typeof exp === 'object') {
+                // Extract meaningful text from object
+                if (exp.jobTitle) {
+                    expStr = exp.jobTitle.toLowerCase();
+                } else if (exp.title) {
+                    expStr = exp.title.toLowerCase();
+                } else if (exp.role) {
+                    expStr = exp.role.toLowerCase();
+                } else {
+                    // Get first non-empty property as fallback
+                    const values = Object.values(exp).filter(v => v && typeof v === 'string');
+                    expStr = values.length > 0 ? values[0].toLowerCase() : '';
+                }
+            } else {
+                expStr = String(exp || '').toLowerCase();
+            }
             
             // Map to remote queries
             if (expStr.includes('engineer')) queries.add('remote software engineer');
@@ -608,7 +643,7 @@ function generateFocusedSearchQueries(analysis) {
             else if (expStr.includes('analyst')) queries.add('remote analyst');
             else if (expStr.includes('designer')) queries.add('remote designer');
             else if (expStr.includes('consultant')) queries.add('remote consultant');
-            else queries.add(`remote ${expStr.split(' ')[0]}`);
+            else if (expStr.length > 0) queries.add(`remote ${expStr.split(' ')[0]}`);
         });
     }
     
@@ -616,7 +651,18 @@ function generateFocusedSearchQueries(analysis) {
     if (analysis.technicalSkills && analysis.technicalSkills.length > 0) {
         const topSkills = analysis.technicalSkills.slice(0, 2);
         topSkills.forEach(skill => {
-            const skillStr = String(skill || '').toLowerCase();
+            // Fix: Handle both string and object cases
+            let skillStr = '';
+            if (typeof skill === 'string') {
+                skillStr = skill.toLowerCase();
+            } else if (skill && typeof skill === 'object') {
+                // Get first non-empty property
+                const values = Object.values(skill).filter(v => v && typeof v === 'string');
+                skillStr = values.length > 0 ? values[0].toLowerCase() : '';
+            } else {
+                skillStr = String(skill || '').toLowerCase();
+            }
+            
             if (skillStr === 'javascript') queries.add('remote javascript developer');
             else if (skillStr === 'python') queries.add('remote python developer');
             else if (skillStr === 'react') queries.add('remote react developer');
@@ -631,6 +677,7 @@ function generateFocusedSearchQueries(analysis) {
         queries.add('remote manager');
     }
     
+    console.log('Generated queries:', Array.from(queries));
     return Array.from(queries).slice(0, 6);
 }
 
@@ -792,7 +839,9 @@ async function searchTheMuseJobs(query, filters) {
                 api_key: THEMUSE_API_KEY,
                 page: 0,
                 limit: 50,
-                location: 'Remote'
+                location: 'Remote',
+                level: 'Entry Level,Mid Level,Senior Level',
+                category: 'Engineering,Data Science,Product,Design'
             },
             timeout: 15000
         });
