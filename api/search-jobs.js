@@ -344,20 +344,22 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
     };
 }
 
-// Enhanced remote job check
+// Enhanced remote job check with better support for different API formats
 function isQuickRemoteCheck(job) {
     if (!job) return false;
     
     const title = (job.title || '').toLowerCase();
     const location = (job.location || '').toLowerCase();
-    const description = (job.description || '').toLowerCase().substring(0, 800);
+    const description = (job.description || '').toLowerCase().substring(0, 1500); // Scan more text
     
-    // More inclusive remote indicators
+    // Expanded remote indicators with more variations from different APIs
     const remoteKeywords = [
         'remote', 'work from home', 'wfh', 'anywhere', 'distributed',
         'fully remote', '100% remote', 'remote-first', 'remote only',
         'virtual', 'telecommute', 'work remotely', 'remote work',
-        'home-based', 'home based', 'flexible location', 'location independent'
+        'home-based', 'home based', 'flexible location', 'location independent',
+        'remote position', 'remote job', 'remote role', 'work from anywhere',
+        'worldwide', 'global', 'all locations', 'any location'
     ];
     
     // Check location first (most reliable)
@@ -367,32 +369,51 @@ function isQuickRemoteCheck(job) {
                              location.includes('global') ||
                              location === 'flexible / remote' ||
                              location === 'remote' ||
-                             location === 'anywhere';
+                             location === 'anywhere' ||
+                             location === '' || // Empty location might indicate remote for some APIs
+                             location === 'united states' || // Some APIs use this for remote US jobs
+                             location.includes('us remote') ||
+                             location.includes('global') ||
+                             location.includes('flexible');
     
     // Check title and description
     const hasRemoteInContent = remoteKeywords.some(keyword => 
         title.includes(keyword) || description.includes(keyword)
     );
     
-    // More permissive - if location suggests remote or content mentions remote, include it
-    if (hasRemoteLocation || hasRemoteInContent) {
+    // Special case for API-specific formatting
+    const isSpecialAPICase = 
+        (job.source === 'JSearch-RapidAPI' && (description.includes('remote job') || title.includes('remote'))) ||
+        (job.source === 'TheMuse' && location.includes('remote')) ||
+        (job.source === 'Adzuna' && (location.includes('remote') || description.includes('remote'))) ||
+        (job.source === 'RapidAPI-Jobs' && (job.remote === true || description.includes('remote')));
+    
+    // If any remote indicator is found, check for non-remote contradictions
+    if (hasRemoteLocation || hasRemoteInContent || isSpecialAPICase) {
         // Only exclude if there are clear non-remote indicators
         const nonRemoteKeywords = [
-            'on-site only', 'onsite only', 'office required', 'relocation required',
+            'on-site only', 'onsite only', 'office required', 
             'must relocate', 'local candidates only', 'no remote work',
             'in-person required', 'office based only', 'no remote option'
         ];
         
-        const hasNonRemote = nonRemoteKeywords.some(keyword => 
-            description.includes(keyword) || title.includes(keyword)
+        // More careful checking - only exclude if explicitly not remote
+        const hasExplicitNonRemote = nonRemoteKeywords.some(keyword => 
+            description.includes(keyword)
         );
         
-        return !hasNonRemote;
+        return !hasExplicitNonRemote;
     }
     
-    // For jobs without clear remote indicators, be more permissive
-    // Don't exclude them immediately - let AI matching decide
-    return true;
+    // Be more inclusive for initial processing - allow jobs with certain keywords
+    // even if they don't explicitly mention remote
+    const probablyRemote = 
+        title.includes('developer') || 
+        title.includes('engineer') || 
+        title.includes('programmer') ||
+        title.includes('analyst');
+    
+    return probablyRemote;
 }
 
 // REAL AI MATCHING - Filter for 70%+ matches using OpenAI
@@ -681,7 +702,7 @@ function generateFocusedSearchQueries(analysis) {
     return Array.from(queries).slice(0, 6);
 }
 
-// Enhanced JSearch function with detailed debugging
+// Fix JSearch-RapidAPI function to handle job data more consistently
 async function searchJSearchRapidAPI(query, filters) {
     const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
     if (!RAPIDAPI_KEY) {
@@ -694,9 +715,9 @@ async function searchJSearchRapidAPI(query, filters) {
         
         const response = await axios.get('https://jsearch.p.rapidapi.com/search', {
             params: {
-                query: `${query} remote`,
+                query: `${query}`,  // Removed 'remote' since it's in the remote_jobs_only param
                 page: '1',
-                num_pages: '3',
+                num_pages: '3',     // Increased pages to get more results
                 remote_jobs_only: 'true'
             },
             headers: {
@@ -712,17 +733,16 @@ async function searchJSearchRapidAPI(query, filters) {
 
         if (!response.data?.data) {
             console.log('⚠️ JSearch: No data field in response');
-            console.log('🔍 JSearch response sample:', JSON.stringify(response.data, null, 2).substring(0, 500));
             return [];
         }
 
-        const jobs = response.data.data
+        return response.data.data
             .filter(job => {
                 if (!job || !job.job_title || !job.employer_name) {
                     console.log('⚠️ JSearch: Skipping job with missing title/company');
                     return false;
                 }
-                return true;
+                return true; // Keep all jobs for initial processing, filter later
             })
             .map(job => ({
                 title: job.job_title,
@@ -733,23 +753,15 @@ async function searchJSearchRapidAPI(query, filters) {
                 description: job.job_description || '',
                 salary: formatRapidAPISalary(job.job_min_salary, job.job_max_salary),
                 type: job.job_employment_type || 'Full-time',
-                datePosted: job.job_posted_at_datetime_utc || new Date().toISOString()
+                datePosted: job.job_posted_at_datetime_utc || new Date().toISOString(),
+                remote: true  // Explicitly mark as remote since we requested remote_jobs_only
             }));
-
-        console.log(`✅ JSearch processed ${jobs.length} jobs`);
-        if (jobs.length > 0) {
-            console.log(`📋 JSearch sample jobs: ${jobs.slice(0, 2).map(j => j.title).join(', ')}`);
-        }
-        
-        return jobs;
 
     } catch (error) {
         console.error('❌ JSearch error details:', {
             message: error.message,
             status: error.response?.status,
-            statusText: error.response?.statusText,
-            url: error.config?.url,
-            params: error.config?.params
+            statusText: error.response?.statusText
         });
         return [];
     }
@@ -1107,6 +1119,143 @@ async function searchTheirstackJobs(query, filters) {
 }
 
 // ===== UTILITY FUNCTIONS =====
+
+// Enhanced basic match calculation with better scoring and more inclusive algorithm
+function calculateEnhancedBasicMatchFixed(job, analysis) {
+    if (!job) return 0;
+    
+    const jobText = `${job.title || ''} ${job.description || ''}`.toLowerCase();
+    let totalScore = 0;
+    let maxPossibleScore = 0;
+    
+    // Technical skills match (35% weight) - IMPROVED ALGORITHM
+    const techSkills = analysis.technicalSkills || [];
+    if (techSkills.length > 0) {
+        let matchedCount = 0;
+        techSkills.forEach(skill => {
+            const skillString = typeof skill === 'string' ? skill.toLowerCase() : String(skill || '').toLowerCase();
+            
+            // Better skill matching with partial matches
+            if (skillString.length > 2) {
+                const skillWords = skillString.split(/[\s\.]+/); // Split by spaces and dots
+                const hasMatch = skillWords.some(word => {
+                    if (word.length < 3) return false;
+                    return jobText.includes(word);
+                }) || jobText.includes(skillString);
+                
+                if (hasMatch) matchedCount++;
+            }
+        });
+        
+        // More generous scoring - count partial matches more
+        const techScore = Math.min((matchedCount / Math.min(techSkills.length, 10)) * 100, 100);
+        totalScore += techScore * 0.35;
+        maxPossibleScore += 35;
+        console.log(`    Tech skills: ${matchedCount}/${techSkills.length} = ${techScore.toFixed(1)}%`);
+    }
+    
+    // Job title/role match (30% weight)
+    const workExperience = analysis.workExperience || [];
+    if (workExperience.length > 0) {
+        let roleMatchScore = 0;
+        const jobTitle = job.title.toLowerCase();
+        
+        workExperience.forEach(exp => {
+            const expString = typeof exp === 'string' ? exp.toLowerCase() : 
+                             (exp && exp.jobTitle ? exp.jobTitle.toLowerCase() : String(exp || '').toLowerCase());
+            
+            // Better role matching with common variations
+            if (expString.includes('engineer') && jobTitle.includes('developer')) roleMatchScore = 90;
+            else if (expString.includes('developer') && jobTitle.includes('engineer')) roleMatchScore = 90;
+            else if (expString.includes('manager') && jobTitle.includes('lead')) roleMatchScore = 80;
+            else if (expString.includes('analyst') && jobTitle.includes('analytics')) roleMatchScore = 85;
+            
+            // Generic word matching
+            const expWords = expString.split(' ').filter(word => word.length > 2);
+            const titleWords = jobTitle.split(' ').filter(word => word.length > 2);
+            
+            const matchingWords = expWords.filter(word => 
+                titleWords.some(titleWord => titleWord.includes(word) || word.includes(titleWord))
+            );
+            
+            if (matchingWords.length > 0) {
+                const wordMatchScore = (matchingWords.length / Math.max(expWords.length, 1)) * 100;
+                roleMatchScore = Math.max(roleMatchScore, wordMatchScore);
+            }
+        });
+        
+        // Boost role matches - they're important
+        roleMatchScore = Math.min(roleMatchScore + 15, 100);
+        
+        totalScore += roleMatchScore * 0.30;
+        maxPossibleScore += 30;
+        console.log(`    Role match: ${roleMatchScore.toFixed(1)}%`);
+    }
+    
+    // Industry match (20% weight)
+    const industries = analysis.industries || [];
+    if (industries.length > 0) {
+        let industryMatchScore = 0;
+        industries.forEach(industry => {
+            const industryString = typeof industry === 'string' ? industry.toLowerCase() : String(industry || '').toLowerCase();
+            if (industryString.length > 2 && jobText.includes(industryString)) {
+                industryMatchScore = 100;
+            }
+        });
+        
+        // Be more lenient with industry match
+        if (industryMatchScore === 0) industryMatchScore = 60; // Default score
+        
+        totalScore += industryMatchScore * 0.20;
+        maxPossibleScore += 20;
+        console.log(`    Industry match: ${industryMatchScore}%`);
+    }
+    
+    // Keywords/responsibilities match (15% weight)
+    const responsibilities = analysis.responsibilities || [];
+    if (responsibilities.length > 0) {
+        let keywordMatchCount = 0;
+        responsibilities.forEach(resp => {
+            const respString = typeof resp === 'string' ? resp.toLowerCase() : String(resp || '').toLowerCase();
+            const keywords = respString.split(' ').filter(word => word.length > 3);
+            
+            keywords.forEach(keyword => {
+                if (jobText.includes(keyword)) {
+                    keywordMatchCount++;
+                }
+            });
+        });
+        
+        // More generous scoring for keywords
+        const keywordScore = Math.min((keywordMatchCount / Math.max(responsibilities.length, 1)) * 100 + 20, 100);
+        totalScore += keywordScore * 0.15;
+        maxPossibleScore += 15;
+        console.log(`    Keyword match: ${keywordScore.toFixed(1)}%`);
+    }
+    
+    // Extra boost for exact job title matches (new)
+    const jobTitleLower = job.title.toLowerCase();
+    const experienceTitles = analysis.workExperience.map(exp => 
+        typeof exp === 'string' ? exp.toLowerCase() : 
+        (exp && exp.jobTitle ? exp.jobTitle.toLowerCase() : '')
+    ).filter(t => t.length > 0);
+    
+    if (experienceTitles.some(title => 
+        jobTitleLower.includes(title) || title.includes(jobTitleLower)
+    )) {
+        // Add boost for title match
+        totalScore += 10;
+        maxPossibleScore += 10;
+        console.log(`    Title exact match boost: +10%`);
+    }
+    
+    // Calculate final score
+    const finalScore = maxPossibleScore > 0 ? Math.round((totalScore / maxPossibleScore) * 100) : 0;
+    
+    console.log(`    Final basic match for "${job.title}": ${finalScore}%`);
+    
+    return Math.min(finalScore, 95);
+}
 
 function formatSalary(min, max) {
     if (min && max) {
