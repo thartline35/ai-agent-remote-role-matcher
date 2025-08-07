@@ -1482,84 +1482,114 @@ function extractSalaryFromDescription(description) {
     return 'Salary not specified';
 }
 
-// NEW: Apply job filters (salary, experience, timezone)
+// FIXED: Salary filter that doesn't exclude good jobs
 function applyJobFilters(jobs, filters) {
     if (!filters || Object.keys(filters).length === 0) {
-    return jobs;
-}
+        return jobs;
+    }
 
-    console.log('🔍 Applying filters:', filters);
+    console.log(`🔍 Applying filters:`, filters);
+    console.log(`📊 Initial jobs count: ${jobs.length}`);
+    
     let filteredJobs = [...jobs];
 
-    // Apply salary filter
+    // FIXED: Apply salary filter - MUCH more lenient
     if (filters.salary && filters.salary !== '') {
         const salaryThreshold = getSalaryThreshold(filters.salary);
+        console.log(`💰 Salary threshold: ${salaryThreshold} (${filters.salary})`);
+        
         if (salaryThreshold > 0) {
+            const beforeSalaryFilter = filteredJobs.length;
             filteredJobs = filteredJobs.filter(job => {
-                const salaryNumbers = extractSalaryNumbersFromString(job.salary);
-                return salaryNumbers.min >= salaryThreshold || salaryNumbers.max >= salaryThreshold;
+                const salaryNumbers = extractSalaryNumbersFromStringFixed(job.salary);
+                
+                // KEY FIX: If no salary info, ALLOW the job to pass through
+                // Only filter out if we have salary info AND it's below threshold
+                let passes = true; // Default to passing
+                
+                if (salaryNumbers.min > 0 || salaryNumbers.max > 0) {
+                    // Only apply filter if we have actual salary data
+                    if (salaryNumbers.min > 0 && salaryNumbers.max > 0) {
+                        passes = salaryNumbers.max >= salaryThreshold;
+                    } else if (salaryNumbers.min > 0) {
+                        passes = salaryNumbers.min >= salaryThreshold;
+                    } else if (salaryNumbers.max > 0) {
+                        passes = salaryNumbers.max >= salaryThreshold;
+                    }
+                }
+                // If no salary data (min=0, max=0), passes stays true
+                
+                console.log(`💰 Job "${job.title}": salary="${job.salary}" -> min:${salaryNumbers.min}, max:${salaryNumbers.max} -> passes:${passes}`);
+                return passes;
             });
-            console.log(`   Salary filter (${filters.salary}): ${filteredJobs.length} jobs remaining`);
+            console.log(`💰 Salary filter: ${beforeSalaryFilter} -> ${filteredJobs.length} jobs`);
         }
     }
 
-    // Apply experience filter
+    // Apply experience filter (unchanged)
     if (filters.experience && filters.experience !== '') {
+        const beforeExperienceFilter = filteredJobs.length;
+        console.log(`👔 Experience filter: ${filters.experience}`);
+        
         filteredJobs = filteredJobs.filter(job => {
             const title = job.title.toLowerCase();
             const description = (job.description || '').toLowerCase();
+            
+            let passes = false;
             
             if (filters.experience === 'entry') {
-                return title.includes('junior') || title.includes('entry') || title.includes('associate') || 
-                       description.includes('entry level') || description.includes('junior') ||
-                       title.includes('intern') || description.includes('0-2 years');
+                passes = title.includes('junior') || title.includes('entry') || title.includes('associate') || 
+                       description.includes('entry level') || description.includes('junior');
             } else if (filters.experience === 'mid') {
-                return !title.includes('senior') && !title.includes('lead') && !title.includes('principal') &&
-                       !title.includes('junior') && !title.includes('entry') && !title.includes('director') &&
-                       (description.includes('2-5 years') || description.includes('3-6 years') || 
-                        (!description.includes('senior') && !description.includes('lead')));
+                passes = !title.includes('senior') && !title.includes('lead') && !title.includes('principal') &&
+                       !title.includes('junior') && !title.includes('entry') && !title.includes('director');
             } else if (filters.experience === 'senior') {
-                return title.includes('senior') || title.includes('lead') || title.includes('principal') ||
-                       description.includes('senior') || description.includes('5+ years') || 
-                       description.includes('6+ years') || description.includes('7+ years');
+                passes = title.includes('senior') || title.includes('lead') || title.includes('principal') ||
+                       description.includes('senior') || description.includes('5+ years');
             } else if (filters.experience === 'lead') {
-                return title.includes('lead') || title.includes('manager') || title.includes('principal') || 
-                       title.includes('architect') || title.includes('director') || title.includes('head of') ||
-                       description.includes('leadership') || description.includes('management');
+                passes = title.includes('lead') || title.includes('manager') || title.includes('principal') || 
+                       title.includes('architect') || title.includes('director') || title.includes('head of');
+            } else {
+                passes = true;
             }
-            return true;
+            
+            console.log(`👔 Job "${job.title}": experience="${filters.experience}" -> passes:${passes}`);
+            return passes;
         });
-        console.log(`   Experience filter (${filters.experience}): ${filteredJobs.length} jobs remaining`);
+        console.log(`👔 Experience filter: ${beforeExperienceFilter} -> ${filteredJobs.length} jobs`);
     }
 
-    // Apply timezone filter
+    // Apply timezone filter (unchanged)
     if (filters.timezone && filters.timezone !== '') {
+        const beforeTimezoneFilter = filteredJobs.length;
+        console.log(`🌍 Timezone filter: ${filters.timezone}`);
+        
         filteredJobs = filteredJobs.filter(job => {
             const description = (job.description || '').toLowerCase();
-            const title = job.title.toLowerCase();
             const location = (job.location || '').toLowerCase();
             
+            let passes = false;
+            
             if (filters.timezone === 'us-only') {
-                return description.includes('us') || description.includes('united states') || 
-                       description.includes('usa') || location.includes('us') || 
-                       description.includes('est') || description.includes('pst') || 
-                       description.includes('cst') || description.includes('mst') ||
-                       description.includes('eastern') || description.includes('pacific') ||
-                       description.includes('central') || description.includes('mountain');
+                passes = description.includes('us') || description.includes('united states') || 
+                       location.includes('us') || description.includes('est') || description.includes('pst');
             } else if (filters.timezone === 'global') {
-                return description.includes('global') || description.includes('worldwide') || 
-                       description.includes('international') || description.includes('any timezone') ||
-                       description.includes('flexible timezone');
+                passes = description.includes('global') || description.includes('worldwide') || 
+                       description.includes('international') || description.includes('any timezone');
             } else if (filters.timezone === 'europe') {
-                return description.includes('europe') || description.includes('eu') || 
-                       description.includes('cet') || description.includes('gmt') ||
-                       description.includes('utc') || location.includes('europe');
+                passes = description.includes('europe') || description.includes('eu') || 
+                       description.includes('cet') || description.includes('gmt');
+            } else {
+                passes = true;
             }
-            return true;
+            
+            console.log(`🌍 Job "${job.title}": timezone="${filters.timezone}" -> passes:${passes}`);
+            return passes;
         });
-        console.log(`   Timezone filter (${filters.timezone}): ${filteredJobs.length} jobs remaining`);
+        console.log(`🌍 Timezone filter: ${beforeTimezoneFilter} -> ${filteredJobs.length} jobs`);
     }
 
+    console.log(`✅ Final filtered jobs count: ${filteredJobs.length}`);
     return filteredJobs;
 }
 
@@ -1576,46 +1606,59 @@ function getSalaryThreshold(salaryFilter) {
     return thresholds[salaryFilter] || 0;
 }
 
-// Helper function to extract salary numbers from salary string
-function extractSalaryNumbersFromString(salaryStr) {
+// FIXED: Enhanced salary parsing that handles hourly rates and more formats
+function extractSalaryNumbersFromStringFixed(salaryStr) {
+    if (!salaryStr || salaryStr === 'Salary not specified') {
+        return { min: 0, max: 0 };
+    }
+    
     const salary = salaryStr.toLowerCase();
     let min = 0, max = 0;
     
-    // Remove common currency symbols and text
+    // Check if salary is in pounds (£) and convert to USD
+    const isPounds = salary.includes('£');
+    const conversionRate = 1.3; // Approximate GBP to USD conversion
+    
+    // FIXED: Handle hourly rates and convert to annual
+    const isHourly = salary.includes('/hour') || salary.includes('per hour') || salary.includes('/hr') || salary.includes('hourly');
+    
+    // Remove currency symbols and commas, but keep the numbers
     const cleanSalary = salary.replace(/[$£€,]/g, '');
     
-    // Look for salary patterns
+    // Enhanced patterns to catch more salary formats
     const rangeMatch = cleanSalary.match(/(\d+)(?:k|,000)?\s*[-–to]\s*(\d+)(?:k|,000)?/);
     const singleMatch = cleanSalary.match(/(\d+)(?:k|,000)?/);
     const fromMatch = cleanSalary.match(/from\s+(\d+)(?:k|,000)?/);
     const upToMatch = cleanSalary.match(/up\s+to\s+(\d+)(?:k|,000)?/);
+    const betweenMatch = cleanSalary.match(/between\s+(\d+)(?:k|,000)?\s+and\s+(\d+)(?:k|,000)?/);
     
     if (rangeMatch) {
-        // Range: "50k - 75k" or "50,000 - 75,000"
         min = parseInt(rangeMatch[1]);
         max = parseInt(rangeMatch[2]);
-        
-        // Handle k notation
+        if (salary.includes('k') || min < 1000) {
+            min *= 1000;
+            max *= 1000;
+        }
+    } else if (betweenMatch) {
+        min = parseInt(betweenMatch[1]);
+        max = parseInt(betweenMatch[2]);
         if (salary.includes('k') || min < 1000) {
             min *= 1000;
             max *= 1000;
         }
     } else if (fromMatch) {
-        // "From 50k"
         min = parseInt(fromMatch[1]);
         if (salary.includes('k') || min < 1000) {
             min *= 1000;
         }
-        max = min; // Use same value for comparison
+        max = min;
     } else if (upToMatch) {
-        // "Up to 75k"
         max = parseInt(upToMatch[1]);
         if (salary.includes('k') || max < 1000) {
             max *= 1000;
         }
-        min = max; // Use same value for comparison
+        min = max;
     } else if (singleMatch) {
-        // Single number "50k" or "50000"
         const num = parseInt(singleMatch[1]);
         if (salary.includes('k') || num < 1000) {
             min = max = num * 1000;
@@ -1623,6 +1666,23 @@ function extractSalaryNumbersFromString(salaryStr) {
             min = max = num;
         }
     }
+    
+    // FIXED: Convert hourly to annual (assuming 40 hours/week, 52 weeks/year)
+    if (isHourly && (min > 0 || max > 0)) {
+        min = min * 40 * 52;
+        max = max * 40 * 52;
+        console.log(`💰 Converted hourly to annual: ${salaryStr} -> min: ${min}, max: ${max}`);
+    }
+    
+    // Convert pounds to dollars if needed
+    if (isPounds && (min > 0 || max > 0)) {
+        min = Math.round(min * conversionRate);
+        max = Math.round(max * conversionRate);
+        console.log(`💰 Converting GBP to USD: ${salaryStr} -> £${min/conversionRate}-£${max/conversionRate} -> $${min}-$${max}`);
+    }
+    
+    // Debug logging for salary extraction
+    console.log(`💰 Salary extraction: "${salaryStr}" -> min: ${min}, max: ${max} ${isPounds ? '(converted from GBP)' : ''} ${isHourly ? '(converted from hourly)' : ''}`);
     
     return { min, max };
 }

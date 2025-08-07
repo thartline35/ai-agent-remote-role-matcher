@@ -1379,7 +1379,8 @@ function getSalaryThreshold(salaryFilter) {
     return thresholds[salaryFilter] || 0;
 }
 
-function extractSalaryNumbersFromString(salaryStr) {
+// FIXED: Enhanced salary parsing that handles hourly rates and more formats
+function extractSalaryNumbersFromStringFixed(salaryStr) {
     if (!salaryStr || salaryStr === 'Salary not specified') {
         return { min: 0, max: 0 };
     }
@@ -1390,6 +1391,9 @@ function extractSalaryNumbersFromString(salaryStr) {
     // Check if salary is in pounds (£) and convert to USD
     const isPounds = salary.includes('£');
     const conversionRate = 1.3; // Approximate GBP to USD conversion
+    
+    // FIXED: Handle hourly rates and convert to annual
+    const isHourly = salary.includes('/hour') || salary.includes('per hour') || salary.includes('/hr') || salary.includes('hourly');
     
     // Remove currency symbols and commas, but keep the numbers
     const cleanSalary = salary.replace(/[$£€,]/g, '');
@@ -1436,6 +1440,13 @@ function extractSalaryNumbersFromString(salaryStr) {
         }
     }
     
+    // FIXED: Convert hourly to annual (assuming 40 hours/week, 52 weeks/year)
+    if (isHourly && (min > 0 || max > 0)) {
+        min = min * 40 * 52;
+        max = max * 40 * 52;
+        console.log(`💰 Converted hourly to annual: ${salaryStr} -> min: ${min}, max: ${max}`);
+    }
+    
     // Convert pounds to dollars if needed
     if (isPounds && (min > 0 || max > 0)) {
         min = Math.round(min * conversionRate);
@@ -1444,11 +1455,12 @@ function extractSalaryNumbersFromString(salaryStr) {
     }
     
     // Debug logging for salary extraction
-    console.log(`💰 Salary extraction: "${salaryStr}" -> min: ${min}, max: ${max} ${isPounds ? '(converted from GBP)' : ''}`);
+    console.log(`💰 Salary extraction: "${salaryStr}" -> min: ${min}, max: ${max} ${isPounds ? '(converted from GBP)' : ''} ${isHourly ? '(converted from hourly)' : ''}`);
     
     return { min, max };
 }
 
+// FIXED: Salary filter that doesn't exclude good jobs
 function applyJobFilters(jobs, filters) {
     if (!filters || Object.keys(filters).length === 0) {
         return jobs;
@@ -1459,7 +1471,7 @@ function applyJobFilters(jobs, filters) {
     
     let filteredJobs = [...jobs];
 
-    // Apply salary filter
+    // FIXED: Apply salary filter - MUCH more lenient
     if (filters.salary && filters.salary !== '') {
         const salaryThreshold = getSalaryThreshold(filters.salary);
         console.log(`💰 Salary threshold: ${salaryThreshold} (${filters.salary})`);
@@ -1467,22 +1479,23 @@ function applyJobFilters(jobs, filters) {
         if (salaryThreshold > 0) {
             const beforeSalaryFilter = filteredJobs.length;
             filteredJobs = filteredJobs.filter(job => {
-                const salaryNumbers = extractSalaryNumbersFromString(job.salary);
-                // Job salary range should overlap with user's minimum requirement
-                // If job has a range, check if max >= user's minimum
-                // If job has only min, check if min >= user's minimum
-                // If job has only max, check if max >= user's minimum
-                let passes = false;
+                const salaryNumbers = extractSalaryNumbersFromStringFixed(job.salary);
                 
-                if (salaryNumbers.min > 0 && salaryNumbers.max > 0) {
-                    passes = salaryNumbers.max >= salaryThreshold;
-                } else if (salaryNumbers.min > 0) {
-                    passes = salaryNumbers.min >= salaryThreshold;
-                } else if (salaryNumbers.max > 0) {
-                    passes = salaryNumbers.max >= salaryThreshold;
-                } else {
-                    passes = false; // No salary info, exclude
+                // KEY FIX: If no salary info, ALLOW the job to pass through
+                // Only filter out if we have salary info AND it's below threshold
+                let passes = true; // Default to passing
+                
+                if (salaryNumbers.min > 0 || salaryNumbers.max > 0) {
+                    // Only apply filter if we have actual salary data
+                    if (salaryNumbers.min > 0 && salaryNumbers.max > 0) {
+                        passes = salaryNumbers.max >= salaryThreshold;
+                    } else if (salaryNumbers.min > 0) {
+                        passes = salaryNumbers.min >= salaryThreshold;
+                    } else if (salaryNumbers.max > 0) {
+                        passes = salaryNumbers.max >= salaryThreshold;
+                    }
                 }
+                // If no salary data (min=0, max=0), passes stays true
                 
                 console.log(`💰 Job "${job.title}": salary="${job.salary}" -> min:${salaryNumbers.min}, max:${salaryNumbers.max} -> passes:${passes}`);
                 return passes;
@@ -1491,7 +1504,7 @@ function applyJobFilters(jobs, filters) {
         }
     }
 
-    // Apply experience filter
+    // Apply experience filter (unchanged)
     if (filters.experience && filters.experience !== '') {
         const beforeExperienceFilter = filteredJobs.length;
         console.log(`👔 Experience filter: ${filters.experience}`);
@@ -1524,7 +1537,7 @@ function applyJobFilters(jobs, filters) {
         console.log(`👔 Experience filter: ${beforeExperienceFilter} -> ${filteredJobs.length} jobs`);
     }
 
-    // Apply timezone filter
+    // Apply timezone filter (unchanged)
     if (filters.timezone && filters.timezone !== '') {
         const beforeTimezoneFilter = filteredJobs.length;
         console.log(`🌍 Timezone filter: ${filters.timezone}`);
