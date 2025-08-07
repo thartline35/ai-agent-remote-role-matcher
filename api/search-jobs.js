@@ -869,52 +869,7 @@ Return ONLY JSON:
     }
 }
 
-// Helper function to check API keys during startup
-function checkApiKeyForSource(sourceName) {
-    console.log(`\n🔑 === CHECKING API KEY FOR ${sourceName} ===`);
-    
-    // Reset status if needed (hourly reset)
-    resetApiStatusIfNeeded();
-    
-    // Check if API is currently marked as exhausted
-    if (apiStatus.exhaustedApis.has(sourceName)) {
-        console.log(`⏭️ ${sourceName}: Skipping - marked as exhausted`);
-        const timeSinceReset = Math.round((Date.now() - apiStatus.lastResetTime) / 1000 / 60);
-        console.log(`   Will retry in ${Math.round((apiStatus.resetInterval / 1000 / 60) - timeSinceReset)} minutes`);
-        return false;
-    }
-    
-    // Check if API key exists (original logic)
-    let hasKey = false;
-    switch (sourceName) {
-        case 'Theirstack':
-            hasKey = !!process.env.THEIRSTACK_API_KEY;
-            break;
-        case 'Adzuna':
-            hasKey = !!(process.env.ADZUNA_APP_ID && process.env.ADZUNA_API_KEY);
-            break;
-        case 'TheMuse':
-            hasKey = !!process.env.THEMUSE_API_KEY;
-            break;
-        case 'Reed':
-            hasKey = !!process.env.REED_API_KEY;
-            break;
-        case 'JSearch-RapidAPI':
-        case 'RapidAPI-Jobs':
-            hasKey = !!process.env.RAPIDAPI_KEY;
-            break;
-        default:
-            hasKey = false;
-    }
-    
-    if (!hasKey) {
-        console.log(`❌ ${sourceName}: API key missing`);
-        return false;
-    }
-    
-    console.log(`✅ ${sourceName}: API key exists - proceeding`);
-    return true;
-}
+
 
 // ===== ENHANCED API SEARCH FUNCTIONS =====
 
@@ -1043,9 +998,6 @@ async function searchJSearchRapidAPIWithDetection(query, filters) {
     });
 }
 
-// Replace original function with enhanced version
-const searchJSearchRapidAPI = searchJSearchRapidAPIWithDetection;
-
 // 1. ADZUNA - Debug version with comprehensive logging
 async function searchAdzunaJobsWithDetection(query, filters) {
     return makeApiCallWithExhaustionDetection('Adzuna', async () => {
@@ -1083,9 +1035,6 @@ async function searchAdzunaJobsWithDetection(query, filters) {
         }));
     });
 }
-
-// Replace original function with enhanced version
-const searchAdzunaJobs = searchAdzunaJobsWithDetection;
 
 // Enhanced API functions with automatic exhaustion detection
 async function searchTheMuseJobsWithDetection(query, filters) {
@@ -1264,6 +1213,8 @@ async function searchTheirstackJobsWithDetection(query, filters) {
 }
 
 // Replace original functions with enhanced versions
+const searchJSearchRapidAPI = searchJSearchRapidAPIWithDetection;
+const searchAdzunaJobs = searchAdzunaJobsWithDetection;
 const searchTheMuseJobs = searchTheMuseJobsWithDetection;
 const searchRapidAPIJobs = searchRapidAPIJobsWithDetection;
 const searchReedJobs = searchReedJobsWithDetection;

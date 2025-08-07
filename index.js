@@ -78,11 +78,15 @@ app.get('/api/health', (req, res) => {
     res.json(healthStatus);
 });
 
-// API routes are now handled by separate files in the /api directory for Vercel deployment
+// API routes for local development
+import searchJobsHandler from './api/search-jobs.js';
+import analyzeResumeHandler from './api/analyze-resume.js';
+import parsePdfHandler from './api/parse-pdf.js';
 
-
-
-
+// API routes
+app.post('/api/search-jobs', searchJobsHandler);
+app.post('/api/analyze-resume', analyzeResumeHandler);
+app.post('/api/parse-pdf', parsePdfHandler);
 
 // Root route - serve the main application
 app.get('/', (req, res) => {
