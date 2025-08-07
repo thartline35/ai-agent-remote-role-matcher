@@ -168,6 +168,15 @@ export default async function handler(req, res) {
 // Enhanced job search with real-time streaming and debugging
 async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFound, onProgress) {
     console.log('=== STARTING REAL-TIME JOB SEARCH WITH DEBUGGING ===');
+    console.log('Resume analysis details:');
+    console.log('- Technical skills:', analysis.technicalSkills?.slice(0, 10));
+    console.log('- Work experience:', analysis.workExperience?.slice(0, 5));
+    console.log('- Industries:', analysis.industries?.slice(0, 3));
+    console.log('- Seniority level:', analysis.seniorityLevel);
+    
+    // Also log the queries that will be used
+    const queries = generateFocusedSearchQueries(analysis);
+    console.log('Generated search queries:', queries);
     
     const allJobs = [];
     const processedJobKeys = new Set();
@@ -193,8 +202,7 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
         { name: 'Theirstack', func: searchTheirstackJobs, weight: 10 }
     ];
 
-    // Generate focused search queries
-    const queries = generateFocusedSearchQueries(analysis);
+    // Generate focused search queries (already generated above)
     console.log('📝 Generated focused queries:', queries.slice(0, 5));
 
     onProgress('Generating search queries...', 5);
@@ -206,6 +214,7 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
         const sourceEndProgress = currentProgress + source.weight;
         
         console.log(`\n🔍 === PROCESSING SOURCE ${sourceIndex + 1}/${sources.length}: ${source.name} ===`);
+        console.log(`📝 ${source.name}: Using these queries:`, queries.slice(0, Math.min(queries.length, 5)));
         
         onProgress(`Searching ${source.name}...`, sourceStartProgress);
         
@@ -540,6 +549,7 @@ async function calculateRealAIJobMatch(job, analysis, openai) {
         messages: [{
             role: "user",
             content: `Analyze this REAL job for COMPREHENSIVE OVERALL MATCH against the candidate's complete profile.
+Try to be generous with the match percentage - if there are any significant overlaps in skills, experience, or industry, consider it a potential match of at least 70%. We're looking for 70%+ matches.
 
 REAL JOB: ${job.title} at ${job.company}
 Location: ${job.location}
@@ -553,6 +563,8 @@ COMPLETE CANDIDATE PROFILE:
 - Qualifications: ${analysis.qualifications?.slice(0, 5).join(', ') || 'None'}
 - Education: ${analysis.education?.slice(0, 5).join(', ') || 'None'}
 - Seniority Level: ${analysis.seniorityLevel || 'Unknown'}
+
+AIM FOR 70%+ MATCHES WHERE POSSIBLE. Only go below 70% if there's truly no significant overlap.
 
 Return ONLY JSON:
 {
@@ -570,6 +582,10 @@ Return ONLY JSON:
         temperature: 0.1,
         max_tokens: 500
     });
+
+    // Log the API response for debugging
+    console.log(`AI Match for "${job.title}" from ${job.source}:`, 
+                response.choices[0].message.content.substring(0, 150) + "...");
 
     const content = response.choices[0].message.content.trim();
     const jsonMatch = content.match(/\{[\s\S]*\}/);
@@ -713,11 +729,14 @@ async function searchJSearchRapidAPI(query, filters) {
     try {
         console.log(`🔍 JSearch: Making API request for "${query}"`);
         
+        // PROBLEM: Current implementation has both 'remote' in the query AND remote_jobs_only=true
+        // FIX: Let's make the parameters more explicit and clear
         const response = await axios.get('https://jsearch.p.rapidapi.com/search', {
             params: {
-                query: `${query}`,  // Removed 'remote' since it's in the remote_jobs_only param
+                query: query,  // Remove the extra "remote" string - redundant with next param
                 page: '1',
-                num_pages: '3',     // Increased pages to get more results
+                num_pages: '3',
+                date_posted: 'all',  // Add this to get more jobs
                 remote_jobs_only: 'true'
             },
             headers: {
@@ -730,6 +749,9 @@ async function searchJSearchRapidAPI(query, filters) {
         console.log(`✅ JSearch API responded with status: ${response.status}`);
         console.log(`📊 JSearch response data keys:`, Object.keys(response.data || {}));
         console.log(`📊 JSearch jobs array length:`, response.data?.data?.length || 0);
+        
+        // [rest of function with additional logging...]
+        console.log(`🔍 JSearch raw response data:`, JSON.stringify(response.data).substring(0, 300));
 
         if (!response.data?.data) {
             console.log('⚠️ JSearch: No data field in response');
@@ -757,6 +779,12 @@ async function searchJSearchRapidAPI(query, filters) {
                 remote: true  // Explicitly mark as remote since we requested remote_jobs_only
             }));
 
+        // Add this to each API function right before the return statement:
+        console.log(`🔍 JSearch-RapidAPI API returned ${jobs.length} raw jobs BEFORE filtering`);
+        if (jobs.length > 0) {
+            console.log(`📋 Sample titles: ${jobs.slice(0, 3).map(j => j.title).join(' | ')}`);
+        }
+
     } catch (error) {
         console.error('❌ JSearch error details:', {
             message: error.message,
@@ -782,14 +810,17 @@ async function searchAdzunaJobs(query, filters) {
     try {
         console.log(`🔍 Adzuna: Making API request for "${query}"`);
         
+        // PROBLEM: 'where' parameter set to 'remote' might not work properly
+        // FIX: Add it to the 'what' parameter instead and use 'true' for remote flag if available
         const response = await axios.get('https://api.adzuna.com/v1/api/jobs/us/search/1', {
             params: {
                 app_id: ADZUNA_APP_ID,
                 app_key: ADZUNA_API_KEY,
-                what: query,
-                where: 'remote',
+                what: `${query} remote`, // Add 'remote' to the search query
+                // where: 'remote',       // Remove or comment this line
                 results_per_page: 50,
-                sort_by: 'relevance'
+                sort_by: 'relevance',
+                full_time: 1              // Add this to get full-time jobs
             },
             timeout: 15000
         });
@@ -821,6 +852,15 @@ async function searchAdzunaJobs(query, filters) {
             console.log(`📋 Adzuna sample jobs: ${jobs.slice(0, 2).map(j => j.title).join(', ')}`);
         }
         
+        // Add this to each API function right before the return statement:
+        console.log(`🔍 Adzuna API returned ${jobs.length} raw jobs BEFORE filtering`);
+        if (jobs.length > 0) {
+            console.log(`📋 Sample titles: ${jobs.slice(0, 3).map(j => j.title).join(' | ')}`);
+        }
+        
+        // [rest of function with additional logging...]
+        console.log(`🔍 Adzuna raw response data:`, JSON.stringify(response.data).substring(0, 300));
+        
         return jobs;
         
     } catch (error) {
@@ -846,14 +886,33 @@ async function searchTheMuseJobs(query, filters) {
     try {
         console.log(`🔍 TheMuse: Making API request for "${query}"`);
         
+        // PROBLEM: Not using query parameter at all!
+        // FIX: Add category parameter based on query
+        const categories = [];
+        if (query.includes('developer') || query.includes('engineer')) {
+            categories.push('Engineering');
+        }
+        if (query.includes('data') || query.includes('analyst')) {
+            categories.push('Data Science');
+        }
+        if (query.includes('manager') || query.includes('product')) {
+            categories.push('Product');
+        }
+        if (query.includes('design')) {
+            categories.push('Design');
+        }
+        
         const response = await axios.get('https://www.themuse.com/api/public/jobs', {
             params: {
                 api_key: THEMUSE_API_KEY,
                 page: 0,
-                limit: 50,
+                limit: 30,
                 location: 'Remote',
-                level: 'Entry Level,Mid Level,Senior Level',
-                category: 'Engineering,Data Science,Product,Design'
+                // Add category based on query if available
+                category: categories.length > 0 ? categories.join(',') : undefined,
+                // Pass the query directly if needed
+                q: query,
+                level: filters.experience || undefined
             },
             timeout: 15000
         });
@@ -884,6 +943,15 @@ async function searchTheMuseJobs(query, filters) {
             console.log(`📋 TheMuse sample jobs: ${jobs.slice(0, 2).map(j => j.title).join(', ')}`);
         }
 
+        // Add this to each API function right before the return statement:
+        console.log(`🔍 TheMuse API returned ${jobs.length} raw jobs BEFORE filtering`);
+        if (jobs.length > 0) {
+            console.log(`📋 Sample titles: ${jobs.slice(0, 3).map(j => j.title).join(' | ')}`);
+        }
+        
+        // [rest of function with additional logging...]
+        console.log(`🔍 TheMuse raw response data:`, JSON.stringify(response.data).substring(0, 300));
+
         return jobs;
 
     } catch (error) {
@@ -908,12 +976,18 @@ async function searchRapidAPIJobs(query, filters) {
     try {
         console.log(`🔍 RapidAPI-Jobs: Making API request for "${query}"`);
         
+        // PROBLEM: remoteOnly parameter might not be working as expected
+        // FIX: Add remote to the query explicitly
         const response = await axios.get('https://jobs-api14.p.rapidapi.com/list', {
             params: {
-                query: `${query} remote`,
+                query: `${query} remote`, // Add remote explicitly 
                 location: 'Remote',
+                distance: '1.0',
+                language: 'en_GB',
                 remoteOnly: 'true',
-                jobType: 'fulltime'
+                datePosted: 'month',
+                jobType: 'fulltime',
+                index: '0'
             },
             headers: {
                 'X-RapidAPI-Key': RAPIDAPI_KEY,
@@ -947,6 +1021,15 @@ async function searchRapidAPIJobs(query, filters) {
         if (jobs.length > 0) {
             console.log(`📋 RapidAPI-Jobs sample: ${jobs.slice(0, 2).map(j => j.title).join(', ')}`);
         }
+
+        // Add this to each API function right before the return statement:
+        console.log(`🔍 RapidAPI-Jobs API returned ${jobs.length} raw jobs BEFORE filtering`);
+        if (jobs.length > 0) {
+            console.log(`📋 Sample titles: ${jobs.slice(0, 3).map(j => j.title).join(' | ')}`);
+        }
+        
+        // [rest of function with additional logging...]
+        console.log(`🔍 RapidAPI-Jobs raw response data:`, JSON.stringify(response.data).substring(0, 300));
 
         return jobs;
 
@@ -1010,6 +1093,15 @@ async function searchReedJobs(query, filters) {
         if (jobs.length > 0) {
             console.log(`📋 Reed sample jobs: ${jobs.slice(0, 2).map(j => j.title).join(', ')}`);
         }
+
+        // Add this to each API function right before the return statement:
+        console.log(`🔍 Reed API returned ${jobs.length} raw jobs BEFORE filtering`);
+        if (jobs.length > 0) {
+            console.log(`📋 Sample titles: ${jobs.slice(0, 3).map(j => j.title).join(' | ')}`);
+        }
+        
+        // [rest of function with additional logging...]
+        console.log(`🔍 Reed raw response data:`, JSON.stringify(response.data).substring(0, 300));
 
         return jobs;
 
@@ -1099,6 +1191,15 @@ async function searchTheirstackJobs(query, filters) {
         if (jobs.length > 0) {
             console.log(`📋 Theirstack sample: ${jobs.slice(0, 2).map(j => j.title).join(', ')}`);
         }
+
+        // Add this to each API function right before the return statement:
+        console.log(`🔍 Theirstack API returned ${jobs.length} raw jobs BEFORE filtering`);
+        if (jobs.length > 0) {
+            console.log(`📋 Sample titles: ${jobs.slice(0, 3).map(j => j.title).join(' | ')}`);
+        }
+        
+        // [rest of function with additional logging...]
+        console.log(`🔍 Theirstack raw response data:`, JSON.stringify(response.data).substring(0, 300));
 
         return jobs;
         
