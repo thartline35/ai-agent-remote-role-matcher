@@ -326,10 +326,12 @@ function isQuickRemoteCheck(job) {
     const location = (job.location || '').toLowerCase();
     const description = (job.description || '').toLowerCase().substring(0, 800);
     
-    // Strong remote indicators
-    const strongRemoteKeywords = [
+    // More inclusive remote indicators
+    const remoteKeywords = [
         'remote', 'work from home', 'wfh', 'anywhere', 'distributed',
-        'fully remote', '100% remote', 'remote-first', 'remote only'
+        'fully remote', '100% remote', 'remote-first', 'remote only',
+        'virtual', 'telecommute', 'work remotely', 'remote work',
+        'home-based', 'home based', 'flexible location', 'location independent'
     ];
     
     // Check location first (most reliable)
@@ -337,30 +339,34 @@ function isQuickRemoteCheck(job) {
                              location.includes('anywhere') || 
                              location.includes('worldwide') ||
                              location.includes('global') ||
-                             location === 'flexible / remote';
+                             location === 'flexible / remote' ||
+                             location === 'remote' ||
+                             location === 'anywhere';
     
     // Check title and description
-    const hasRemoteInContent = strongRemoteKeywords.some(keyword => 
+    const hasRemoteInContent = remoteKeywords.some(keyword => 
         title.includes(keyword) || description.includes(keyword)
     );
     
-    // Must have clear remote indicators
-    if (!hasRemoteLocation && !hasRemoteInContent) {
-        return false;
+    // More permissive - if location suggests remote or content mentions remote, include it
+    if (hasRemoteLocation || hasRemoteInContent) {
+        // Only exclude if there are clear non-remote indicators
+        const nonRemoteKeywords = [
+            'on-site only', 'onsite only', 'office required', 'relocation required',
+            'must relocate', 'local candidates only', 'no remote work',
+            'in-person required', 'office based only', 'no remote option'
+        ];
+        
+        const hasNonRemote = nonRemoteKeywords.some(keyword => 
+            description.includes(keyword) || title.includes(keyword)
+        );
+        
+        return !hasNonRemote;
     }
     
-    // Exclude jobs with strict on-site requirements
-    const nonRemoteKeywords = [
-        'on-site only', 'onsite only', 'office required', 'relocation required',
-        'must relocate', 'local candidates only', 'no remote work',
-        'in-person required', 'office based only'
-    ];
-    
-    const hasNonRemote = nonRemoteKeywords.some(keyword => 
-        description.includes(keyword) || title.includes(keyword)
-    );
-    
-    return !hasNonRemote;
+    // For jobs without clear remote indicators, be more permissive
+    // Don't exclude them immediately - let AI matching decide
+    return true;
 }
 
 // REAL AI MATCHING - Filter for 70%+ matches using OpenAI
@@ -1102,15 +1108,26 @@ function extractSalaryNumbersFromString(salaryStr) {
     const salary = salaryStr.toLowerCase();
     let min = 0, max = 0;
     
+    // Remove currency symbols and commas, but keep the numbers
     const cleanSalary = salary.replace(/[$£€,]/g, '');
+    
+    // Enhanced patterns to catch more salary formats
     const rangeMatch = cleanSalary.match(/(\d+)(?:k|,000)?\s*[-–to]\s*(\d+)(?:k|,000)?/);
     const singleMatch = cleanSalary.match(/(\d+)(?:k|,000)?/);
     const fromMatch = cleanSalary.match(/from\s+(\d+)(?:k|,000)?/);
     const upToMatch = cleanSalary.match(/up\s+to\s+(\d+)(?:k|,000)?/);
+    const betweenMatch = cleanSalary.match(/between\s+(\d+)(?:k|,000)?\s+and\s+(\d+)(?:k|,000)?/);
     
     if (rangeMatch) {
         min = parseInt(rangeMatch[1]);
         max = parseInt(rangeMatch[2]);
+        if (salary.includes('k') || min < 1000) {
+            min *= 1000;
+            max *= 1000;
+        }
+    } else if (betweenMatch) {
+        min = parseInt(betweenMatch[1]);
+        max = parseInt(betweenMatch[2]);
         if (salary.includes('k') || min < 1000) {
             min *= 1000;
             max *= 1000;
@@ -1136,6 +1153,9 @@ function extractSalaryNumbersFromString(salaryStr) {
         }
     }
     
+    // Debug logging for salary extraction
+    console.log(`💰 Salary extraction: "${salaryStr}" -> min: ${min}, max: ${max}`);
+    
     return { min, max };
 }
 
@@ -1144,72 +1164,106 @@ function applyJobFilters(jobs, filters) {
         return jobs;
     }
 
+    console.log(`🔍 Applying filters:`, filters);
+    console.log(`📊 Initial jobs count: ${jobs.length}`);
+    
     let filteredJobs = [...jobs];
 
     // Apply salary filter
     if (filters.salary && filters.salary !== '') {
         const salaryThreshold = getSalaryThreshold(filters.salary);
+        console.log(`💰 Salary threshold: ${salaryThreshold} (${filters.salary})`);
+        
         if (salaryThreshold > 0) {
+            const beforeSalaryFilter = filteredJobs.length;
             filteredJobs = filteredJobs.filter(job => {
                 const salaryNumbers = extractSalaryNumbersFromString(job.salary);
                 // Job salary range should overlap with user's minimum requirement
                 // If job has a range, check if max >= user's minimum
                 // If job has only min, check if min >= user's minimum
                 // If job has only max, check if max >= user's minimum
+                let passes = false;
+                
                 if (salaryNumbers.min > 0 && salaryNumbers.max > 0) {
-                    return salaryNumbers.max >= salaryThreshold;
+                    passes = salaryNumbers.max >= salaryThreshold;
                 } else if (salaryNumbers.min > 0) {
-                    return salaryNumbers.min >= salaryThreshold;
+                    passes = salaryNumbers.min >= salaryThreshold;
                 } else if (salaryNumbers.max > 0) {
-                    return salaryNumbers.max >= salaryThreshold;
+                    passes = salaryNumbers.max >= salaryThreshold;
+                } else {
+                    passes = false; // No salary info, exclude
                 }
-                return false; // No salary info, exclude
+                
+                console.log(`💰 Job "${job.title}": salary="${job.salary}" -> min:${salaryNumbers.min}, max:${salaryNumbers.max} -> passes:${passes}`);
+                return passes;
             });
+            console.log(`💰 Salary filter: ${beforeSalaryFilter} -> ${filteredJobs.length} jobs`);
         }
     }
 
     // Apply experience filter
     if (filters.experience && filters.experience !== '') {
+        const beforeExperienceFilter = filteredJobs.length;
+        console.log(`👔 Experience filter: ${filters.experience}`);
+        
         filteredJobs = filteredJobs.filter(job => {
             const title = job.title.toLowerCase();
             const description = (job.description || '').toLowerCase();
             
+            let passes = false;
+            
             if (filters.experience === 'entry') {
-                return title.includes('junior') || title.includes('entry') || title.includes('associate') || 
+                passes = title.includes('junior') || title.includes('entry') || title.includes('associate') || 
                        description.includes('entry level') || description.includes('junior');
             } else if (filters.experience === 'mid') {
-                return !title.includes('senior') && !title.includes('lead') && !title.includes('principal') &&
+                passes = !title.includes('senior') && !title.includes('lead') && !title.includes('principal') &&
                        !title.includes('junior') && !title.includes('entry') && !title.includes('director');
             } else if (filters.experience === 'senior') {
-                return title.includes('senior') || title.includes('lead') || title.includes('principal') ||
+                passes = title.includes('senior') || title.includes('lead') || title.includes('principal') ||
                        description.includes('senior') || description.includes('5+ years');
             } else if (filters.experience === 'lead') {
-                return title.includes('lead') || title.includes('manager') || title.includes('principal') || 
+                passes = title.includes('lead') || title.includes('manager') || title.includes('principal') || 
                        title.includes('architect') || title.includes('director') || title.includes('head of');
+            } else {
+                passes = true;
             }
-            return true;
+            
+            console.log(`👔 Job "${job.title}": experience="${filters.experience}" -> passes:${passes}`);
+            return passes;
         });
+        console.log(`👔 Experience filter: ${beforeExperienceFilter} -> ${filteredJobs.length} jobs`);
     }
 
     // Apply timezone filter
     if (filters.timezone && filters.timezone !== '') {
+        const beforeTimezoneFilter = filteredJobs.length;
+        console.log(`🌍 Timezone filter: ${filters.timezone}`);
+        
         filteredJobs = filteredJobs.filter(job => {
             const description = (job.description || '').toLowerCase();
             const location = (job.location || '').toLowerCase();
             
+            let passes = false;
+            
             if (filters.timezone === 'us-only') {
-                return description.includes('us') || description.includes('united states') || 
+                passes = description.includes('us') || description.includes('united states') || 
                        location.includes('us') || description.includes('est') || description.includes('pst');
             } else if (filters.timezone === 'global') {
-                return description.includes('global') || description.includes('worldwide') || 
+                passes = description.includes('global') || description.includes('worldwide') || 
                        description.includes('international') || description.includes('any timezone');
             } else if (filters.timezone === 'europe') {
-                return description.includes('europe') || description.includes('eu') || 
+                passes = description.includes('europe') || description.includes('eu') || 
                        description.includes('cet') || description.includes('gmt');
+            } else {
+                passes = true;
             }
-            return true;
+            
+            console.log(`🌍 Job "${job.title}": timezone="${filters.timezone}" -> passes:${passes}`);
+            return passes;
         });
+        console.log(`🌍 Timezone filter: ${beforeTimezoneFilter} -> ${filteredJobs.length} jobs`);
     }
 
+    console.log(`✅ Final filtered jobs count: ${filteredJobs.length}`);
     return filteredJobs;
 }
