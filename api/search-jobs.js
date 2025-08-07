@@ -1,4 +1,4 @@
-// /api/search-jobs.js - COMPLETE FIXED VERSION with Enhanced Debugging
+// /api/search-jobs.js - DEBUG VERSION with Enhanced Logging for the 4 Failing APIs
 import OpenAI from 'openai';
 import axios from 'axios';
 
@@ -270,7 +270,7 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
                             }
                             
                             // Basic remote job check - be VERY lenient for non-Reed sources
-                            const isRemote = isLenient ? true : isQuickRemoteCheck(job);
+                            const isRemote = isQuickRemoteCheck(job);
                             if (!isRemote) {
                                 console.log(`   ❌ ${source.name}: Skipping non-remote job "${job.title}" (location: ${job.location})`);
                                 return false;
@@ -620,39 +620,67 @@ Return ONLY JSON:
     }
 }
 
-// Check if API key exists for a source
+// Helper function to check API keys during startup
 function checkApiKeyForSource(sourceName) {
+    console.log(`\n🔑 === CHECKING API KEY FOR ${sourceName} ===`);
+    
+    let hasKey = false;
     switch (sourceName) {
         case 'Theirstack':
-            const hasTheirstack = !!process.env.THEIRSTACK_API_KEY;
-            console.log(`🔑 Theirstack API key check: ${hasTheirstack ? 'EXISTS' : 'MISSING'}`);
-            return hasTheirstack;
+            hasKey = !!process.env.THEIRSTACK_API_KEY;
+            if (hasKey) {
+                console.log(`✅ ${sourceName}: API key exists (length: ${process.env.THEIRSTACK_API_KEY.length})`);
+            } else {
+                console.log(`❌ ${sourceName}: API key missing`);
+            }
+            break;
             
         case 'Adzuna':
-            const hasAdzuna = !!(process.env.ADZUNA_APP_ID && process.env.ADZUNA_API_KEY);
-            console.log(`🔑 Adzuna API key check: ${hasAdzuna ? 'EXISTS' : 'MISSING'}`);
-            return hasAdzuna;
+            hasKey = !!(process.env.ADZUNA_APP_ID && process.env.ADZUNA_API_KEY);
+            if (hasKey) {
+                console.log(`✅ ${sourceName}: App ID exists (length: ${process.env.ADZUNA_APP_ID.length})`);
+                console.log(`✅ ${sourceName}: API key exists (length: ${process.env.ADZUNA_API_KEY.length})`);
+            } else {
+                console.log(`❌ ${sourceName}: Missing ADZUNA_APP_ID or ADZUNA_API_KEY`);
+                console.log(`  ADZUNA_APP_ID: ${!!process.env.ADZUNA_APP_ID}`);
+                console.log(`  ADZUNA_API_KEY: ${!!process.env.ADZUNA_API_KEY}`);
+            }
+            break;
             
         case 'TheMuse':
-            const hasTheMuse = !!process.env.THEMUSE_API_KEY;
-            console.log(`🔑 TheMuse API key check: ${hasTheMuse ? 'EXISTS' : 'MISSING'}`);
-            return hasTheMuse;
+            hasKey = !!process.env.THEMUSE_API_KEY;
+            if (hasKey) {
+                console.log(`✅ ${sourceName}: API key exists (length: ${process.env.THEMUSE_API_KEY.length})`);
+            } else {
+                console.log(`❌ ${sourceName}: API key missing`);
+            }
+            break;
             
         case 'Reed':
-            const hasReed = !!process.env.REED_API_KEY;
-            console.log(`🔑 Reed API key check: ${hasReed ? 'EXISTS' : 'MISSING'}`);
-            return hasReed;
+            hasKey = !!process.env.REED_API_KEY;
+            if (hasKey) {
+                console.log(`✅ ${sourceName}: API key exists (length: ${process.env.REED_API_KEY.length})`);
+            } else {
+                console.log(`❌ ${sourceName}: API key missing`);
+            }
+            break;
             
         case 'JSearch-RapidAPI':
         case 'RapidAPI-Jobs':
-            const hasRapidAPI = !!process.env.RAPIDAPI_KEY;
-            console.log(`🔑 ${sourceName} API key check: ${hasRapidAPI ? 'EXISTS' : 'MISSING'}`);
-            return hasRapidAPI;
+            hasKey = !!process.env.RAPIDAPI_KEY;
+            if (hasKey) {
+                console.log(`✅ ${sourceName}: RapidAPI key exists (length: ${process.env.RAPIDAPI_KEY.length})`);
+            } else {
+                console.log(`❌ ${sourceName}: RapidAPI key missing`);
+            }
+            break;
             
         default:
-            console.log(`🔑 Unknown source: ${sourceName}`);
-            return false;
+            console.log(`❓ ${sourceName}: Unknown source`);
+            break;
     }
+    
+    return hasKey;
 }
 
 // ===== ENHANCED API SEARCH FUNCTIONS =====
@@ -730,42 +758,58 @@ function generateFocusedSearchQueries(analysis) {
     return Array.from(queries).slice(0, 6);
 }
 
-// Fix JSearch-RapidAPI function to handle job data more consistently
+// 2. JSEARCH-RAPIDAPI - Debug version  
 async function searchJSearchRapidAPI(query, filters) {
     const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
+    
+    console.log('\n🔍 === JSEARCH DEBUG START ===');
+    console.log('RAPIDAPI_KEY exists:', !!RAPIDAPI_KEY);
+    if (RAPIDAPI_KEY) console.log('RAPIDAPI_KEY length:', RAPIDAPI_KEY.length);
+    
     if (!RAPIDAPI_KEY) {
         console.log('❌ JSearch: RapidAPI key missing');
         return [];
     }
 
     try {
-        console.log(`🔍 JSearch: Making API request for "${query}"`);
+        const requestUrl = 'https://jsearch.p.rapidapi.com/search';
+        const params = {
+            query: query,
+            page: '1',
+            num_pages: '2',
+            remote_jobs_only: 'true'
+        };
+        const headers = {
+            'X-RapidAPI-Key': RAPIDAPI_KEY,
+            'X-RapidAPI-Host': 'jsearch.p.rapidapi.com'
+        };
         
-        // FIX: Don't add "remote" to query, use remote_jobs_only parameter instead
-        const response = await axios.get('https://jsearch.p.rapidapi.com/search', {
-            params: {
-                query: query,  // REMOVED redundant "remote" from query
-                page: '1',
-                num_pages: '2',
-                remote_jobs_only: 'true'  // This handles remote filtering
-            },
-            headers: {
-                'X-RapidAPI-Key': RAPIDAPI_KEY,
-                'X-RapidAPI-Host': 'jsearch.p.rapidapi.com'
-            },
+        console.log('📍 JSearch request URL:', requestUrl);
+        console.log('📋 JSearch request params:', JSON.stringify(params, null, 2));
+        console.log('📋 JSearch request headers:', JSON.stringify(headers, null, 2));
+
+        const response = await axios.get(requestUrl, {
+            params: params,
+            headers: headers,
             timeout: 15000
         });
 
-        console.log(`✅ JSearch API responded with status: ${response.status}`);
-        console.log(`📊 JSearch jobs array length:`, response.data?.data?.length || 0);
+        console.log(`✅ JSearch HTTP status: ${response.status}`);
+        console.log(`📊 JSearch response headers:`, response.headers);
+        console.log(`📊 JSearch response keys:`, Object.keys(response.data || {}));
+        console.log(`📊 JSearch full response:`, JSON.stringify(response.data).substring(0, 1000));
 
-        if (!response.data?.data) {
+        if (response.data?.data) {
+            console.log(`📊 JSearch jobs count: ${response.data.data.length}`);
+            if (response.data.data.length > 0) {
+                console.log(`📋 JSearch first job:`, JSON.stringify(response.data.data[0], null, 2));
+            }
+        } else {
             console.log('⚠️ JSearch: No data field in response');
             return [];
         }
 
-        // FIX: Be more lenient - assume all jobs are remote since we requested remote_jobs_only
-        return response.data.data
+        const mappedJobs = response.data.data
             .filter(job => job && job.job_title && job.employer_name)
             .map(job => ({
                 title: job.job_title,
@@ -778,15 +822,31 @@ async function searchJSearchRapidAPI(query, filters) {
                 type: job.job_employment_type || 'Full-time',
                 datePosted: job.job_posted_at_datetime_utc || new Date().toISOString()
             }));
+
+        console.log(`🎯 JSearch mapped ${mappedJobs.length} jobs`);
+        return mappedJobs;
+
     } catch (error) {
-        console.error('❌ JSearch error details:', error.message);
+        console.error('❌ JSEARCH ERROR:');
+        console.error('Message:', error.message);
+        console.error('Code:', error.code);
+        console.error('Response status:', error.response?.status);
+        console.error('Response data:', JSON.stringify(error.response?.data, null, 2));
         return [];
     }
 }
 
+// 1. ADZUNA - Debug version with comprehensive logging
 async function searchAdzunaJobs(query, filters) {
     const ADZUNA_APP_ID = process.env.ADZUNA_APP_ID;
     const ADZUNA_API_KEY = process.env.ADZUNA_API_KEY;
+    
+    console.log('\n🔍 === ADZUNA DEBUG START ===');
+    console.log('ADZUNA_APP_ID exists:', !!ADZUNA_APP_ID);
+    console.log('ADZUNA_API_KEY exists:', !!ADZUNA_API_KEY);
+    
+    if (ADZUNA_APP_ID) console.log('ADZUNA_APP_ID length:', ADZUNA_APP_ID.length);
+    if (ADZUNA_API_KEY) console.log('ADZUNA_API_KEY length:', ADZUNA_API_KEY.length);
     
     if (!ADZUNA_APP_ID || !ADZUNA_API_KEY) {
         console.log('❌ Adzuna: Missing credentials');
@@ -794,67 +854,65 @@ async function searchAdzunaJobs(query, filters) {
     }
 
     try {
-        console.log(`🔍 Adzuna: Making API request for "${query}"`);
+        const requestUrl = 'https://api.adzuna.com/v1/api/jobs/us/search/1';
+        const params = {
+            app_id: ADZUNA_APP_ID,
+            app_key: ADZUNA_API_KEY,
+            what: query.replace('remote ', ''), // Remove 'remote' from query
+            where: 'remote',
+            results_per_page: 50,
+            sort_by: 'relevance'
+        };
         
-        // FIX: Don't add "remote" to query parameter, use 'where' parameter instead
-        const response = await axios.get('https://api.adzuna.com/v1/api/jobs/us/search/1', {
-            params: {
-                app_id: ADZUNA_APP_ID,
-                app_key: ADZUNA_API_KEY,
-                what: query,  // FIXED: removed redundant "remote" from query
-                where: 'remote',  // This parameter handles remote filtering
-                results_per_page: 50,
-                sort_by: 'relevance'
-            },
-            timeout: 15000
+        console.log('📍 Adzuna request URL:', requestUrl);
+        console.log('📋 Adzuna request params:', JSON.stringify(params, null, 2));
+        
+        const response = await axios.get(requestUrl, {
+            params: params,
+            timeout: 15000,
+            headers: {
+                'User-Agent': 'JobMatcher/1.0'
+            }
         });
 
-        console.log(`✅ Adzuna API responded with ${response.data?.results?.length || 0} jobs`);
-
-        if (!response.data?.results) {
+        console.log(`✅ Adzuna HTTP status: ${response.status}`);
+        console.log(`📊 Adzuna response headers:`, response.headers);
+        console.log(`📊 Adzuna response keys:`, Object.keys(response.data || {}));
+        console.log(`📊 Adzuna full response:`, JSON.stringify(response.data).substring(0, 1000));
+        
+        if (response.data?.results) {
+            console.log(`📊 Adzuna jobs count: ${response.data.results.length}`);
+            if (response.data.results.length > 0) {
+                console.log(`📋 Adzuna first job:`, JSON.stringify(response.data.results[0], null, 2));
+            }
+        } else {
             console.log('⚠️ Adzuna: No results field in response');
             return [];
         }
 
-        // FIX: Manually check each job for remote indicators
-        // since Adzuna doesn't have a reliable remote-only filter
-        return response.data.results
-            .filter(job => {
-                // Check if this is likely a remote job
-                const title = (job.title || '').toLowerCase();
-                const description = (job.description || '').toLowerCase();
-                const location = (job.location?.display_name || '').toLowerCase();
-                
-                const remoteKeywords = ['remote', 'work from home', 'wfh', 'telecommute', 'virtual'];
-                const isRemote = remoteKeywords.some(keyword => 
-                    title.includes(keyword) || 
-                    description.includes(keyword) || 
-                    location.includes(keyword)
-                );
-                
-                return isRemote;
-            })
-            .map(job => {
-                // Enhanced salary handling
-                let salary = formatSalary(job.salary_min, job.salary_max);
-                if (salary === 'Salary not specified' && job.description) {
-                    salary = extractSalaryFromDescription(job.description);
-                }
-                
-                return {
-                    title: job.title,
-                    company: job.company?.display_name || 'Unknown Company',
-                    location: 'Remote', // Force to Remote for consistency
-                    link: job.redirect_url,
-                    source: 'Adzuna',
-                    description: job.description || '',
-                    salary: salary,
-                    type: job.contract_time || 'Full-time',
-                    datePosted: job.created || new Date().toISOString()
-                };
-            });
+        const mappedJobs = response.data.results.map(job => ({
+            title: job.title,
+            company: job.company?.display_name || 'Unknown Company',
+            location: job.location?.display_name || 'Remote',
+            link: job.redirect_url,
+            source: 'Adzuna',
+            description: job.description || '',
+            salary: formatSalary(job.salary_min, job.salary_max),
+            type: job.contract_time || 'Full-time',
+            datePosted: job.created || new Date().toISOString()
+        }));
+
+        console.log(`🎯 Adzuna mapped ${mappedJobs.length} jobs`);
+        return mappedJobs;
+        
     } catch (error) {
-        console.error('❌ Adzuna error:', error.message);
+        console.error('❌ ADZUNA ERROR:');
+        console.error('Message:', error.message);
+        console.error('Code:', error.code);
+        console.error('Response status:', error.response?.status);
+        console.error('Response data:', JSON.stringify(error.response?.data, null, 2));
+        console.error('Request URL:', error.config?.url);
+        console.error('Request params:', error.config?.params);
         return [];
     }
 }
@@ -922,44 +980,62 @@ async function searchTheMuseJobs(query, filters) {
     }
 }
 
+// 3. RAPIDAPI-JOBS - Debug version
 async function searchRapidAPIJobs(query, filters) {
     const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
+    
+    console.log('\n🔍 === RAPIDAPI-JOBS DEBUG START ===');
+    console.log('RAPIDAPI_KEY exists:', !!RAPIDAPI_KEY);
+    if (RAPIDAPI_KEY) console.log('RAPIDAPI_KEY length:', RAPIDAPI_KEY.length);
+
     if (!RAPIDAPI_KEY) {
         console.log('❌ RapidAPI-Jobs: API key missing');
         return [];
     }
 
     try {
-        console.log(`🔍 RapidAPI-Jobs: Making API request for "${query}"`);
+        const requestUrl = 'https://jobs-api14.p.rapidapi.com/list';
+        const params = {
+            query: query,
+            location: 'Remote',
+            distance: '1.0',
+            language: 'en_GB',
+            remoteOnly: 'true',
+            datePosted: 'month',
+            jobType: 'fulltime',
+            index: '0'
+        };
+        const headers = {
+            'X-RapidAPI-Key': RAPIDAPI_KEY,
+            'X-RapidAPI-Host': 'jobs-api14.p.rapidapi.com'
+        };
         
-        // FIX: Don't add "remote" to query, use remoteOnly parameter instead
-        const response = await axios.get('https://jobs-api14.p.rapidapi.com/list', {
-            params: {
-                query: query,  // FIXED: removed redundant "remote" from query
-                location: 'Remote',
-                distance: '1.0',
-                language: 'en_GB',
-                remoteOnly: 'true',  // This parameter handles remote filtering
-                datePosted: 'month',
-                jobType: 'fulltime',
-                index: '0'
-            },
-            headers: {
-                'X-RapidAPI-Key': RAPIDAPI_KEY,
-                'X-RapidAPI-Host': 'jobs-api14.p.rapidapi.com'
-            },
+        console.log('📍 RapidAPI-Jobs request URL:', requestUrl);
+        console.log('📋 RapidAPI-Jobs request params:', JSON.stringify(params, null, 2));
+        console.log('📋 RapidAPI-Jobs request headers:', JSON.stringify(headers, null, 2));
+
+        const response = await axios.get(requestUrl, {
+            params: params,
+            headers: headers,
             timeout: 15000
         });
 
-        console.log(`✅ RapidAPI-Jobs responded with ${response.data?.jobs?.length || 0} jobs`);
+        console.log(`✅ RapidAPI-Jobs HTTP status: ${response.status}`);
+        console.log(`📊 RapidAPI-Jobs response headers:`, response.headers);
+        console.log(`📊 RapidAPI-Jobs response keys:`, Object.keys(response.data || {}));
+        console.log(`📊 RapidAPI-Jobs full response:`, JSON.stringify(response.data).substring(0, 1000));
 
-        if (!response.data?.jobs) {
+        if (response.data?.jobs) {
+            console.log(`📊 RapidAPI-Jobs count: ${response.data.jobs.length}`);
+            if (response.data.jobs.length > 0) {
+                console.log(`📋 RapidAPI-Jobs first job:`, JSON.stringify(response.data.jobs[0], null, 2));
+            }
+        } else {
             console.log('⚠️ RapidAPI-Jobs: No jobs field in response');
             return [];
         }
 
-        // FIX: Be more lenient - assume all jobs are remote since we requested remoteOnly
-        return response.data.jobs.map(job => ({
+        const mappedJobs = response.data.jobs.map(job => ({
             title: job.title,
             company: job.company || 'Unknown Company',
             location: job.location || 'Remote',
@@ -970,8 +1046,16 @@ async function searchRapidAPIJobs(query, filters) {
             type: job.jobType || 'Full-time',
             datePosted: job.datePosted || new Date().toISOString()
         }));
+
+        console.log(`🎯 RapidAPI-Jobs mapped ${mappedJobs.length} jobs`);
+        return mappedJobs;
+
     } catch (error) {
-        console.error('❌ RapidAPI-Jobs error:', error.message);
+        console.error('❌ RAPIDAPI-JOBS ERROR:');
+        console.error('Message:', error.message);
+        console.error('Code:', error.code);
+        console.error('Response status:', error.response?.status);
+        console.error('Response data:', JSON.stringify(error.response?.data, null, 2));
         return [];
     }
 }
@@ -1048,140 +1132,98 @@ async function searchReedJobs(query, filters) {
     }
 }
 
-// TheirStack API - Enhanced for reliable results
+// 4. THEIRSTACK - Debug version
 async function searchTheirstackJobs(query, filters) {
     const THEIRSTACK_API_KEY = process.env.THEIRSTACK_API_KEY;
     
-    if (!THEIRSTACK_API_KEY) {
-        console.log('❌ Theirstack API key missing');
-        return [];
-    }
+    console.log('\n🔍 === THEIRSTACK DEBUG START ===');
+    console.log('THEIRSTACK_API_KEY exists:', !!THEIRSTACK_API_KEY);
+    if (THEIRSTACK_API_KEY) console.log('THEIRSTACK_API_KEY length:', THEIRSTACK_API_KEY.length);
 
-    // Limit usage to prevent hitting free tier limits
-    if (theirstackUsageCount >= 190) {
-        console.log('⚠️ Theirstack approaching rate limit (190/200) - limiting requests');
+    if (!THEIRSTACK_API_KEY) {
+        console.log('❌ Theirstack: API key missing');
         return [];
     }
-    
-    theirstackUsageCount++;
-    console.log(`📊 Theirstack API usage: ${theirstackUsageCount}/200`);
 
     try {
-        console.log(`🔍 Theirstack: Making API request for "${query}"`);
-        
-        // FIX: Convert query to a proper search term in the request body
-        // The key issue was that TheirStack uses POST with JSON body, not query params
-        let searchTerms = [];
-        if (query) {
-            // Extract meaningful search terms from the query
-            searchTerms = query.replace('remote', '')
-                              .split(' ')
-                              .filter(term => term.length > 2);
-        }
-        
-        // FIX: Use the correct API endpoint and request format
+        const requestUrl = 'https://api.theirstack.com/v1/jobs/search';
         const requestBody = {
             page: 0,
-            limit: 50,  // Increased from 20
-            // Add search terms from query if available
-            search_terms: searchTerms.length > 0 ? searchTerms : undefined,
-            // Always request remote jobs
+            limit: 50,
+            search_terms: query.replace('remote ', '').split(' ').filter(term => term.length > 2),
             remote_only: true,
-            // Use appropriate job country codes based on filters
-            job_country_code_or: filters.timezone === 'us-only' ? ['US'] : 
-                                filters.timezone === 'europe' ? ['GB', 'DE', 'FR', 'ES', 'IT', 'NL'] : 
-                                undefined,
-            // Limit to recent postings
             posted_at_max_age_days: 30
         };
+        const headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${THEIRSTACK_API_KEY}`,
+            'Accept': 'application/json'
+        };
         
-        console.log(`📝 Theirstack request body:`, JSON.stringify(requestBody));
-        
-        const response = await axios.post('https://api.theirstack.com/v1/jobs/search', requestBody, {
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${THEIRSTACK_API_KEY}`,
-                'Accept': 'application/json'
-            },
+        console.log('📍 Theirstack request URL:', requestUrl);
+        console.log('📋 Theirstack request body:', JSON.stringify(requestBody, null, 2));
+        console.log('📋 Theirstack request headers:', JSON.stringify(headers, null, 2));
+
+        const response = await axios.post(requestUrl, requestBody, {
+            headers: headers,
             timeout: 15000
         });
 
-        console.log(`✅ Theirstack API responded with status: ${response.status}`);
-        
-        // FIX: Handle various response formats from TheirStack
+        console.log(`✅ Theirstack HTTP status: ${response.status}`);
+        console.log(`📊 Theirstack response headers:`, response.headers);
+        console.log(`📊 Theirstack response keys:`, Object.keys(response.data || {}));
+        console.log(`📊 Theirstack full response:`, JSON.stringify(response.data).substring(0, 1000));
+
+        // Try multiple possible response structures
         let jobsData = null;
         if (response.data?.jobs) {
             jobsData = response.data.jobs;
+            console.log('📊 Found jobs in response.data.jobs');
         } else if (response.data?.data) {
             jobsData = response.data.data;
+            console.log('📊 Found jobs in response.data.data');
         } else if (response.data?.results) {
             jobsData = response.data.results;
+            console.log('📊 Found jobs in response.data.results');
         } else if (Array.isArray(response.data)) {
             jobsData = response.data;
+            console.log('📊 Found jobs in response.data (array)');
         }
 
         if (!jobsData || !Array.isArray(jobsData)) {
             console.log('⚠️ Theirstack: No recognizable jobs array in response');
-            console.log('Response structure:', Object.keys(response.data || {}));
             return [];
         }
 
-        console.log(`📊 Theirstack jobs found: ${jobsData.length}`);
-        
-        // FIX: Handle various job data structures that TheirStack might return
-        const jobs = jobsData.map(job => {
-            // Extract job fields with fallbacks for different field names
-            const title = job.title || job.name || job.job_title || 'Unknown Title';
-            const company = job.company?.name || job.company_name || job.employer || job.company || 'Unknown Company';
-            const location = job.location || job.job_location || 'Remote';
-            const link = job.url || job.apply_url || job.job_url || job.link || '#';
-            const description = job.description || job.summary || job.job_description || '';
-            
-            // Handle salary with multiple possible field names
-            let salary = 'Salary not specified';
-            if (job.salary_min || job.salary_max || job.min_salary || job.max_salary) {
-                salary = formatSalary(
-                    job.salary_min || job.min_salary, 
-                    job.salary_max || job.max_salary
-                );
-            } else if (job.salary) {
-                salary = job.salary;
-            }
-            
-            // Get job type with fallbacks
-            const jobType = job.employment_type || job.job_type || job.type || 'Full-time';
-            
-            // Get post date with fallbacks
-            const datePosted = job.posted_at || job.created_at || job.date_posted || new Date().toISOString();
-            
-            return {
-                title,
-                company,
-                location,
-                link,
-                source: 'Theirstack',
-                description,
-                salary,
-                type: jobType,
-                datePosted
-            };
-        });
-
-        console.log(`✅ Theirstack processed ${jobs.length} jobs`);
-        if (jobs.length > 0) {
-            console.log(`📋 Theirstack sample jobs: ${jobs.slice(0, 3).map(j => j.title).join(' | ')}`);
+        console.log(`📊 Theirstack jobs count: ${jobsData.length}`);
+        if (jobsData.length > 0) {
+            console.log(`📋 Theirstack first job:`, JSON.stringify(jobsData[0], null, 2));
         }
 
-        return jobs;
-        
+        const mappedJobs = jobsData.map(job => ({
+            title: job.title || job.name || job.job_title || 'Unknown Title',
+            company: job.company?.name || job.company_name || job.employer || job.company || 'Unknown Company',
+            location: job.location || job.job_location || 'Remote',
+            link: job.url || job.apply_url || job.job_url || job.link || '#',
+            source: 'Theirstack',
+            description: job.description || job.summary || job.job_description || '',
+            salary: formatSalary(job.salary_min || job.min_salary, job.salary_max || job.max_salary) || job.salary || 'Salary not specified',
+            type: job.employment_type || job.job_type || job.type || 'Full-time',
+            datePosted: job.posted_at || job.created_at || job.date_posted || new Date().toISOString()
+        }));
+
+        console.log(`🎯 Theirstack mapped ${mappedJobs.length} jobs`);
+        return mappedJobs;
+
     } catch (error) {
-        console.error('❌ Theirstack error:', error.message);
-        
+        console.error('❌ THEIRSTACK ERROR:');
+        console.error('Message:', error.message);
+        console.error('Code:', error.code);
+        console.error('Response status:', error.response?.status);
+        console.error('Response data:', JSON.stringify(error.response?.data, null, 2));
         if (error.response?.status === 429) {
             console.error('🚫 Theirstack rate limit hit');
-            theirstackUsageCount = 200; // Mark as rate limited
         }
-        
         return [];
     }
 }
