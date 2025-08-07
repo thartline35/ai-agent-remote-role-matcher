@@ -221,8 +221,8 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
             
             console.log(`✅ ${source.name}: API key found - PROCEEDING`);
             
-            // Use fewer queries per source for speed
-            const maxQueries = source.name === 'Theirstack' ? 2 : 3;
+            // Use appropriate number of queries per source
+            const maxQueries = source.name === 'Theirstack' ? 4 : 6;
             const sourceJobs = [];
             
             console.log(`📝 ${source.name}: Processing ${maxQueries} queries`);
@@ -258,20 +258,33 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
                         console.log(`   🔍 After filtering: ${filteredJobs.length} jobs`);
                         
                         if (filteredJobs.length > 0) {
-                            // Apply user filters (salary, experience, timezone) BEFORE AI matching
+                            // Apply user filters (salary, experience, timezone)
+                            console.log(`   🔍 Applying user filters to ${filteredJobs.length} jobs...`);
                             const userFilteredJobs = applyJobFilters(filteredJobs, filters);
                             console.log(`   ⚙️ After user filters: ${userFilteredJobs.length} jobs`);
                             
                             if (userFilteredJobs.length > 0) {
                                 console.log(`   🤖 Starting AI matching for ${userFilteredJobs.length} jobs...`);
                                 
-                                // REAL AI MATCHING with REAL-TIME streaming
-                                const highMatchJobs = await filterRealHighMatchJobsWithStreaming(userFilteredJobs, analysis, openai, processedJobKeys, onJobFound, source.name, sourceStartProgress, source.weight, i, maxQueries);
-                                console.log(`   🎯 AI found ${highMatchJobs.length} jobs with 70%+ match`);
+                                // REAL AI matching with 70% threshold
+                                const aiMatchedJobs = await filterRealHighMatchJobsWithStreaming(
+                                    userFilteredJobs, 
+                                    analysis, 
+                                    openai, 
+                                    processedJobKeys, 
+                                    onJobFound, 
+                                    source.name, 
+                                    sourceStartProgress, 
+                                    source.weight, 
+                                    i, 
+                                    maxQueries
+                                );
                                 
-                                if (highMatchJobs.length > 0) {
-                                    sourceJobs.push(...highMatchJobs);
-                                    allJobs.push(...highMatchJobs);
+                                console.log(`   🎯 AI matched: ${aiMatchedJobs.length} jobs with 70%+ match`);
+                                
+                                if (aiMatchedJobs.length > 0) {
+                                    sourceJobs.push(...aiMatchedJobs);
+                                    allJobs.push(...aiMatchedJobs);
                                 }
                             }
                         }
@@ -636,7 +649,7 @@ async function searchJSearchRapidAPI(query, filters) {
             params: {
                 query: `${query} remote`,
                 page: '1',
-                num_pages: '1',
+                num_pages: '3',
                 remote_jobs_only: 'true'
             },
             headers: {
@@ -716,7 +729,7 @@ async function searchAdzunaJobs(query, filters) {
                 app_key: ADZUNA_API_KEY,
                 what: query,
                 where: 'remote',
-                results_per_page: 30,
+                results_per_page: 50,
                 sort_by: 'relevance'
             },
             timeout: 15000
@@ -778,7 +791,7 @@ async function searchTheMuseJobs(query, filters) {
             params: {
                 api_key: THEMUSE_API_KEY,
                 page: 0,
-                limit: 30,
+                limit: 50,
                 location: 'Remote'
             },
             timeout: 15000
@@ -901,7 +914,7 @@ async function searchReedJobs(query, filters) {
             params: {
                 keywords: query,
                 locationName: 'Remote',
-                resultsToTake: 30
+                resultsToTake: 50
             },
             headers: {
                 'Authorization': `Basic ${Buffer.from(REED_API_KEY + ':').toString('base64')}`
@@ -971,7 +984,7 @@ async function searchTheirstackJobs(query, filters) {
         
         const requestBody = {
             page: 0,
-            limit: 25,
+            limit: 50,
             job_country_code_or: ["US"],
             posted_at_max_age_days: 30,
             remote_only: true
@@ -1108,6 +1121,10 @@ function extractSalaryNumbersFromString(salaryStr) {
     const salary = salaryStr.toLowerCase();
     let min = 0, max = 0;
     
+    // Check if salary is in pounds (£) and convert to USD
+    const isPounds = salary.includes('£');
+    const conversionRate = 1.3; // Approximate GBP to USD conversion
+    
     // Remove currency symbols and commas, but keep the numbers
     const cleanSalary = salary.replace(/[$£€,]/g, '');
     
@@ -1153,8 +1170,15 @@ function extractSalaryNumbersFromString(salaryStr) {
         }
     }
     
+    // Convert pounds to dollars if needed
+    if (isPounds && (min > 0 || max > 0)) {
+        min = Math.round(min * conversionRate);
+        max = Math.round(max * conversionRate);
+        console.log(`💰 Converting GBP to USD: ${salaryStr} -> £${min/conversionRate}-£${max/conversionRate} -> $${min}-$${max}`);
+    }
+    
     // Debug logging for salary extraction
-    console.log(`💰 Salary extraction: "${salaryStr}" -> min: ${min}, max: ${max}`);
+    console.log(`💰 Salary extraction: "${salaryStr}" -> min: ${min}, max: ${max} ${isPounds ? '(converted from GBP)' : ''}`);
     
     return { min, max };
 }
