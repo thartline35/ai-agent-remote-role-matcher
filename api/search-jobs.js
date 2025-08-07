@@ -361,16 +361,9 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
 }
 
 // Enhanced remote job check with better support for different API formats
-// FIX: More lenient remote job detection
+// FIX: More lenient remote job detection - removed source dependency since source is added later
 function isQuickRemoteCheck(job) {
     if (!job) return false;
-    
-    // FIX: Always return true for jobs from APIs that already filter for remote
-    if (job.source === 'JSearch-RapidAPI' || 
-        job.source === 'RapidAPI-Jobs' || 
-        job.source === 'TheMuse') {
-        return true; // These APIs already have remote filtering parameters
-    }
     
     const title = (job.title || '').toLowerCase();
     const location = (job.location || '').toLowerCase();
