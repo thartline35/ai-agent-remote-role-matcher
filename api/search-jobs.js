@@ -265,18 +265,13 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
                             if (userFilteredJobs.length > 0) {
                                 console.log(`   🤖 Starting AI matching for ${userFilteredJobs.length} jobs...`);
                                 
-                                // REAL AI MATCHING - Only show 70%+ matches
-                                const highMatchJobs = await filterRealHighMatchJobs(userFilteredJobs, analysis, openai, processedJobKeys);
+                                // REAL AI MATCHING with REAL-TIME streaming
+                                const highMatchJobs = await filterRealHighMatchJobsWithStreaming(userFilteredJobs, analysis, openai, processedJobKeys, onJobFound, source.name, sourceStartProgress, source.weight, i, maxQueries);
                                 console.log(`   🎯 AI found ${highMatchJobs.length} jobs with 70%+ match`);
                                 
                                 if (highMatchJobs.length > 0) {
                                     sourceJobs.push(...highMatchJobs);
                                     allJobs.push(...highMatchJobs);
-                                    
-                                    // Stream REAL 70%+ matches immediately
-                                    const sourceProgress = sourceStartProgress + ((i + 1) / maxQueries) * source.weight;
-                                    console.log(`   📡 STREAMING ${highMatchJobs.length} jobs from ${source.name}`);
-                                    onJobFound(highMatchJobs, source.name, Math.round(sourceProgress));
                                 }
                             }
                         }
@@ -414,6 +409,68 @@ async function filterRealHighMatchJobs(jobs, analysis, openai, processedJobs) {
         
         if (i + batchSize < jobs.length) {
             await new Promise(resolve => setTimeout(resolve, 300));
+        }
+    }
+    
+    return highMatchJobs;
+}
+
+// REAL AI MATCHING with REAL-TIME streaming - streams jobs as they're processed
+async function filterRealHighMatchJobsWithStreaming(jobs, analysis, openai, processedJobs, onJobFound, sourceName, sourceStartProgress, sourceWeight, queryIndex, maxQueries) {
+    const highMatchJobs = [];
+    const batchSize = 2; // Smaller batches for faster streaming
+    
+    for (let i = 0; i < jobs.length; i += batchSize) {
+        const batch = jobs.slice(i, i + batchSize);
+        
+        const batchPromises = batch.map(async (job, index) => {
+            if (!job || !job.title || !job.company) {
+                return null;
+            }
+            
+            try {
+                await new Promise(resolve => setTimeout(resolve, index * 100)); // Faster processing
+                
+                console.log(`🔍 AI Processing: "${job.title}" from "${job.source}"`);
+                
+                // REAL AI analysis using OpenAI
+                const aiMatch = await calculateRealAIJobMatch(job, analysis, openai);
+                
+                if (aiMatch.matchPercentage >= 70) {
+                    const enhancedJob = {
+                        ...job,
+                        ...aiMatch,
+                        source: job.source || 'Unknown'
+                    };
+                    
+                    console.log(`✅ AI Match: "${enhancedJob.title}" with ${enhancedJob.matchPercentage}% match`);
+                    return enhancedJob;
+                }
+                
+                return null;
+
+            } catch (error) {
+                console.error(`AI match analysis failed for "${job.title}":`, error.message);
+                return null;
+            }
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+        const validResults = batchResults.filter(job => job !== null);
+        
+        // Stream jobs immediately as they're processed
+        if (validResults.length > 0) {
+            highMatchJobs.push(...validResults);
+            
+            // Calculate progress and stream immediately
+            const currentProgress = sourceStartProgress + ((queryIndex + 1) / maxQueries) * sourceWeight;
+            console.log(`📡 STREAMING ${validResults.length} AI-matched jobs from ${sourceName}`);
+            onJobFound(validResults, sourceName, Math.round(currentProgress));
+        }
+        
+        // Short delay between batches for real-time feel
+        if (i + batchSize < jobs.length) {
+            await new Promise(resolve => setTimeout(resolve, 100));
         }
     }
     
@@ -1095,7 +1152,18 @@ function applyJobFilters(jobs, filters) {
         if (salaryThreshold > 0) {
             filteredJobs = filteredJobs.filter(job => {
                 const salaryNumbers = extractSalaryNumbersFromString(job.salary);
-                return salaryNumbers.min >= salaryThreshold || salaryNumbers.max >= salaryThreshold;
+                // Job salary range should overlap with user's minimum requirement
+                // If job has a range, check if max >= user's minimum
+                // If job has only min, check if min >= user's minimum
+                // If job has only max, check if max >= user's minimum
+                if (salaryNumbers.min > 0 && salaryNumbers.max > 0) {
+                    return salaryNumbers.max >= salaryThreshold;
+                } else if (salaryNumbers.min > 0) {
+                    return salaryNumbers.min >= salaryThreshold;
+                } else if (salaryNumbers.max > 0) {
+                    return salaryNumbers.max >= salaryThreshold;
+                }
+                return false; // No salary info, exclude
             });
         }
     }
