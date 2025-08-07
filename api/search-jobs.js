@@ -10,6 +10,238 @@ const openai = new OpenAI({
 // Theirstack usage tracking (free tier has 200 request limit)
 let theirstackUsageCount = 0;
 
+// AUTOMATED API EXHAUSTION DETECTION SYSTEM
+
+// 1. DYNAMIC API STATUS TRACKING (resets on server restart)
+const apiStatus = {
+    exhaustedApis: new Set(),           // APIs that are out of credits
+    suspiciousApis: new Map(),          // APIs with recent failures (count)
+    lastResetTime: Date.now(),          // When we last reset the status
+    resetInterval: 1000 * 60 * 60,     // Reset every hour (1 hour in ms)
+    maxSuspiciousFailures: 3            // Mark as exhausted after 3 consecutive failures
+};
+
+// 2. DETECT API EXHAUSTION PATTERNS
+function detectApiExhaustion(error, response, sourceName) {
+    console.log(`🔍 Analyzing ${sourceName} response for exhaustion patterns...`);
+    
+    const exhaustionIndicators = {
+        // HTTP Status codes that indicate quota issues
+        httpStatuses: [429, 403, 402, 509], // Rate limited, Forbidden, Payment required, Bandwidth exceeded
+        
+        // Error messages that indicate quota exhaustion
+        errorMessages: [
+            'quota', 'limit', 'exceeded', 'exhausted', 'credits', 'usage',
+            'rate limit', 'too many requests', 'api limit', 'monthly limit',
+            'subscription', 'billing', 'payment', 'insufficient', 'balance'
+        ],
+        
+        // Response patterns that suggest exhaustion
+        emptyResponsePatterns: [
+            'no data available', 'service unavailable', 'temporarily unavailable'
+        ]
+    };
+    
+    let isExhausted = false;
+    let reason = '';
+    
+    // Check HTTP status codes
+    if (error?.response?.status && exhaustionIndicators.httpStatuses.includes(error.response.status)) {
+        isExhausted = true;
+        reason = `HTTP ${error.response.status}`;
+        console.log(`🚫 ${sourceName}: Exhaustion detected - ${reason}`);
+    }
+    
+    // Check error messages
+    const errorText = (error?.message || error?.response?.data?.error || error?.response?.data?.message || '').toLowerCase();
+    if (errorText && exhaustionIndicators.errorMessages.some(indicator => errorText.includes(indicator))) {
+        isExhausted = true;
+        reason = `Error message contains quota indicator: "${errorText.substring(0, 100)}"`;
+        console.log(`🚫 ${sourceName}: Exhaustion detected - ${reason}`);
+    }
+    
+    // Check response data for exhaustion indicators
+    if (response?.data) {
+        const responseText = JSON.stringify(response.data).toLowerCase();
+        if (exhaustionIndicators.errorMessages.some(indicator => responseText.includes(indicator))) {
+            isExhausted = true;
+            reason = `Response contains quota indicator`;
+            console.log(`🚫 ${sourceName}: Exhaustion detected - ${reason}`);
+        }
+    }
+    
+    // Check for suspicious empty responses (might indicate soft limits)
+    if (!error && response?.status === 200 && (!response.data || 
+        (Array.isArray(response.data) && response.data.length === 0) ||
+        (response.data.results && response.data.results.length === 0) ||
+        (response.data.data && response.data.data.length === 0))) {
+        
+        // Increment suspicious failure count
+        const currentCount = apiStatus.suspiciousApis.get(sourceName) || 0;
+        apiStatus.suspiciousApis.set(sourceName, currentCount + 1);
+        
+        console.log(`⚠️ ${sourceName}: Empty response (${currentCount + 1}/${apiStatus.maxSuspiciousFailures} suspicious failures)`);
+        
+        if (currentCount + 1 >= apiStatus.maxSuspiciousFailures) {
+            isExhausted = true;
+            reason = `Too many consecutive empty responses (${currentCount + 1})`;
+            console.log(`🚫 ${sourceName}: Marked as exhausted due to suspicious pattern`);
+        }
+    }
+    
+    return { isExhausted, reason };
+}
+
+// 3. MARK API AS EXHAUSTED
+function markApiAsExhausted(sourceName, reason) {
+    if (!apiStatus.exhaustedApis.has(sourceName)) {
+        apiStatus.exhaustedApis.add(sourceName);
+        console.log(`🚫 MARKED AS EXHAUSTED: ${sourceName} - ${reason}`);
+        console.log(`📊 Total exhausted APIs: ${apiStatus.exhaustedApis.size}`);
+        
+        // Log current status
+        console.log(`📋 Currently exhausted APIs: [${Array.from(apiStatus.exhaustedApis).join(', ')}]`);
+    }
+}
+
+// 4. RESET API STATUS (hourly or on demand)
+function resetApiStatusIfNeeded() {
+    const timeSinceReset = Date.now() - apiStatus.lastResetTime;
+    
+    if (timeSinceReset > apiStatus.resetInterval) {
+        console.log(`🔄 Resetting API exhaustion status (${Math.round(timeSinceReset / 1000 / 60)} minutes since last reset)`);
+        
+        const previouslyExhausted = Array.from(apiStatus.exhaustedApis);
+        apiStatus.exhaustedApis.clear();
+        apiStatus.suspiciousApis.clear();
+        apiStatus.lastResetTime = Date.now();
+        
+        if (previouslyExhausted.length > 0) {
+            console.log(`♻️ Reset exhaustion status for: [${previouslyExhausted.join(', ')}]`);
+        }
+        
+        return true;
+    }
+    
+    return false;
+}
+
+// 5. ENHANCED API KEY CHECK WITH DYNAMIC EXHAUSTION
+function checkApiKeyForSource(sourceName) {
+    console.log(`\n🔑 === CHECKING ${sourceName} ===`);
+    
+    // Reset status if needed (hourly reset)
+    resetApiStatusIfNeeded();
+    
+    // Check if API is currently marked as exhausted
+    if (apiStatus.exhaustedApis.has(sourceName)) {
+        console.log(`⏭️ ${sourceName}: Skipping - marked as exhausted`);
+        const timeSinceReset = Math.round((Date.now() - apiStatus.lastResetTime) / 1000 / 60);
+        console.log(`   Will retry in ${Math.round((apiStatus.resetInterval / 1000 / 60) - timeSinceReset)} minutes`);
+        return false;
+    }
+    
+    // Check if API key exists (original logic)
+    let hasKey = false;
+    switch (sourceName) {
+        case 'Theirstack':
+            hasKey = !!process.env.THEIRSTACK_API_KEY;
+            break;
+        case 'Adzuna':
+            hasKey = !!(process.env.ADZUNA_APP_ID && process.env.ADZUNA_API_KEY);
+            break;
+        case 'TheMuse':
+            hasKey = !!process.env.THEMUSE_API_KEY;
+            break;
+        case 'Reed':
+            hasKey = !!process.env.REED_API_KEY;
+            break;
+        case 'JSearch-RapidAPI':
+        case 'RapidAPI-Jobs':
+            hasKey = !!process.env.RAPIDAPI_KEY;
+            break;
+        default:
+            hasKey = false;
+    }
+    
+    if (!hasKey) {
+        console.log(`❌ ${sourceName}: API key missing`);
+        return false;
+    }
+    
+    console.log(`✅ ${sourceName}: API key exists - proceeding`);
+    return true;
+}
+
+// 6. WRAPPER FUNCTION FOR API CALLS WITH AUTOMATIC EXHAUSTION DETECTION
+async function makeApiCallWithExhaustionDetection(sourceName, apiCallFunction, ...args) {
+    console.log(`📞 Making API call to ${sourceName}...`);
+    
+    try {
+        const result = await apiCallFunction(...args);
+        
+        // Success - reset suspicious count for this API
+        if (apiStatus.suspiciousApis.has(sourceName)) {
+            console.log(`✅ ${sourceName}: Successful response - clearing suspicious count`);
+            apiStatus.suspiciousApis.delete(sourceName);
+        }
+        
+        // Check if result is suspiciously empty (might indicate soft exhaustion)
+        if (Array.isArray(result) && result.length === 0) {
+            const exhaustionCheck = detectApiExhaustion(null, { status: 200, data: result }, sourceName);
+            if (exhaustionCheck.isExhausted) {
+                markApiAsExhausted(sourceName, exhaustionCheck.reason);
+            }
+        }
+        
+        return result;
+        
+    } catch (error) {
+        console.log(`❌ ${sourceName}: API call failed - analyzing error...`);
+        
+        // Analyze the error for exhaustion patterns
+        const exhaustionCheck = detectApiExhaustion(error, error.response, sourceName);
+        
+        if (exhaustionCheck.isExhausted) {
+            markApiAsExhausted(sourceName, exhaustionCheck.reason);
+            return []; // Return empty array for exhausted APIs
+        }
+        
+        // If not exhaustion, it's a different error - re-throw or handle normally
+        console.log(`⚠️ ${sourceName}: Non-exhaustion error - ${error.message}`);
+        return []; // Return empty array for other errors too
+    }
+}
+
+// 7. STATUS MONITORING ENDPOINT
+function getApiStatusReport() {
+    const report = {
+        timestamp: new Date().toISOString(),
+        exhaustedApis: Array.from(apiStatus.exhaustedApis),
+        suspiciousApis: Object.fromEntries(apiStatus.suspiciousApis),
+        lastResetTime: new Date(apiStatus.lastResetTime).toISOString(),
+        nextResetIn: Math.round((apiStatus.resetInterval - (Date.now() - apiStatus.lastResetTime)) / 1000 / 60),
+        totalExhausted: apiStatus.exhaustedApis.size
+    };
+    
+    console.log('\n📊 === API STATUS REPORT ===');
+    console.log(`Exhausted APIs: [${report.exhaustedApis.join(', ')}]`);
+    console.log(`Suspicious APIs: ${JSON.stringify(report.suspiciousApis)}`);
+    console.log(`Next reset in: ${report.nextResetIn} minutes`);
+    console.log('============================\n');
+    
+    return report;
+}
+
+// 8. MANUAL RESET FUNCTION (for testing)
+function manualResetApiStatus() {
+    console.log('🔄 MANUAL RESET: Clearing all API exhaustion status');
+    apiStatus.exhaustedApis.clear();
+    apiStatus.suspiciousApis.clear();
+    apiStatus.lastResetTime = Date.now();
+    console.log('✅ All APIs reset and available for retry');
+}
+
 export default async function handler(req, res) {
     // Enable CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -21,7 +253,20 @@ export default async function handler(req, res) {
         return res.status(200).end();
     }
 
-    // Only allow POST requests
+    // Handle different request methods
+    if (req.method === 'GET' && req.url?.includes('/api-status')) {
+        // API Status monitoring endpoint
+        const statusReport = getApiStatusReport();
+        return res.status(200).json(statusReport);
+    }
+    
+    if (req.method === 'POST' && req.url?.includes('/reset-api-status')) {
+        // Manual reset endpoint
+        manualResetApiStatus();
+        return res.status(200).json({ message: 'API status reset successfully' });
+    }
+    
+    // Only allow POST requests for job search
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
@@ -124,6 +369,9 @@ export default async function handler(req, res) {
         console.log(`Total search time: ${totalSearchTime}s`);
         console.log(`Jobs found: ${totalJobsFound}`);
 
+        // Get API status report for final response
+        const apiStatusReport = getApiStatusReport();
+        
         // Send final completion message with all collected jobs
         const finalData = {
             type: 'search_complete',
@@ -131,6 +379,7 @@ export default async function handler(req, res) {
             totalJobs: totalJobsFound,
             searchTimeSeconds: parseFloat(totalSearchTime),
             message: `Found ${totalJobsFound} remote jobs matching your profile`,
+            apiStatus: apiStatusReport,
             timestamp: new Date().toISOString()
         };
 
@@ -624,63 +873,47 @@ Return ONLY JSON:
 function checkApiKeyForSource(sourceName) {
     console.log(`\n🔑 === CHECKING API KEY FOR ${sourceName} ===`);
     
+    // Reset status if needed (hourly reset)
+    resetApiStatusIfNeeded();
+    
+    // Check if API is currently marked as exhausted
+    if (apiStatus.exhaustedApis.has(sourceName)) {
+        console.log(`⏭️ ${sourceName}: Skipping - marked as exhausted`);
+        const timeSinceReset = Math.round((Date.now() - apiStatus.lastResetTime) / 1000 / 60);
+        console.log(`   Will retry in ${Math.round((apiStatus.resetInterval / 1000 / 60) - timeSinceReset)} minutes`);
+        return false;
+    }
+    
+    // Check if API key exists (original logic)
     let hasKey = false;
     switch (sourceName) {
         case 'Theirstack':
             hasKey = !!process.env.THEIRSTACK_API_KEY;
-            if (hasKey) {
-                console.log(`✅ ${sourceName}: API key exists (length: ${process.env.THEIRSTACK_API_KEY.length})`);
-            } else {
-                console.log(`❌ ${sourceName}: API key missing`);
-            }
             break;
-            
         case 'Adzuna':
             hasKey = !!(process.env.ADZUNA_APP_ID && process.env.ADZUNA_API_KEY);
-            if (hasKey) {
-                console.log(`✅ ${sourceName}: App ID exists (length: ${process.env.ADZUNA_APP_ID.length})`);
-                console.log(`✅ ${sourceName}: API key exists (length: ${process.env.ADZUNA_API_KEY.length})`);
-            } else {
-                console.log(`❌ ${sourceName}: Missing ADZUNA_APP_ID or ADZUNA_API_KEY`);
-                console.log(`  ADZUNA_APP_ID: ${!!process.env.ADZUNA_APP_ID}`);
-                console.log(`  ADZUNA_API_KEY: ${!!process.env.ADZUNA_API_KEY}`);
-            }
             break;
-            
         case 'TheMuse':
             hasKey = !!process.env.THEMUSE_API_KEY;
-            if (hasKey) {
-                console.log(`✅ ${sourceName}: API key exists (length: ${process.env.THEMUSE_API_KEY.length})`);
-            } else {
-                console.log(`❌ ${sourceName}: API key missing`);
-            }
             break;
-            
         case 'Reed':
             hasKey = !!process.env.REED_API_KEY;
-            if (hasKey) {
-                console.log(`✅ ${sourceName}: API key exists (length: ${process.env.REED_API_KEY.length})`);
-            } else {
-                console.log(`❌ ${sourceName}: API key missing`);
-            }
             break;
-            
         case 'JSearch-RapidAPI':
         case 'RapidAPI-Jobs':
             hasKey = !!process.env.RAPIDAPI_KEY;
-            if (hasKey) {
-                console.log(`✅ ${sourceName}: RapidAPI key exists (length: ${process.env.RAPIDAPI_KEY.length})`);
-            } else {
-                console.log(`❌ ${sourceName}: RapidAPI key missing`);
-            }
             break;
-            
         default:
-            console.log(`❓ ${sourceName}: Unknown source`);
-            break;
+            hasKey = false;
     }
     
-    return hasKey;
+    if (!hasKey) {
+        console.log(`❌ ${sourceName}: API key missing`);
+        return false;
+    }
+    
+    console.log(`✅ ${sourceName}: API key exists - proceeding`);
+    return true;
 }
 
 // ===== ENHANCED API SEARCH FUNCTIONS =====
@@ -759,57 +992,42 @@ function generateFocusedSearchQueries(analysis) {
 }
 
 // 2. JSEARCH-RAPIDAPI - Debug version  
-async function searchJSearchRapidAPI(query, filters) {
-    const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
-    
-    console.log('\n🔍 === JSEARCH DEBUG START ===');
-    console.log('RAPIDAPI_KEY exists:', !!RAPIDAPI_KEY);
-    if (RAPIDAPI_KEY) console.log('RAPIDAPI_KEY length:', RAPIDAPI_KEY.length);
-    
-    if (!RAPIDAPI_KEY) {
-        console.log('❌ JSearch: RapidAPI key missing');
-        return [];
-    }
-
-    try {
-        const requestUrl = 'https://jsearch.p.rapidapi.com/search';
-        const params = {
-            query: query,
-            page: '1',
-            num_pages: '2',
-            remote_jobs_only: 'true'
-        };
-        const headers = {
-            'X-RapidAPI-Key': RAPIDAPI_KEY,
-            'X-RapidAPI-Host': 'jsearch.p.rapidapi.com'
-        };
+// 7. ENHANCED API FUNCTIONS WITH AUTOMATIC DETECTION
+async function searchJSearchRapidAPIWithDetection(query, filters) {
+    return makeApiCallWithExhaustionDetection('JSearch-RapidAPI', async () => {
+        const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
         
-        console.log('📍 JSearch request URL:', requestUrl);
-        console.log('📋 JSearch request params:', JSON.stringify(params, null, 2));
-        console.log('📋 JSearch request headers:', JSON.stringify(headers, null, 2));
-
-        const response = await axios.get(requestUrl, {
-            params: params,
-            headers: headers,
+        const response = await axios.get('https://jsearch.p.rapidapi.com/search', {
+            params: {
+                query: query,
+                page: '1',
+                num_pages: '2', 
+                remote_jobs_only: 'true'
+            },
+            headers: {
+                'X-RapidAPI-Key': RAPIDAPI_KEY,
+                'X-RapidAPI-Host': 'jsearch.p.rapidapi.com'
+            },
             timeout: 15000
         });
 
-        console.log(`✅ JSearch HTTP status: ${response.status}`);
-        console.log(`📊 JSearch response headers:`, response.headers);
-        console.log(`📊 JSearch response keys:`, Object.keys(response.data || {}));
-        console.log(`📊 JSearch full response:`, JSON.stringify(response.data).substring(0, 1000));
-
-        if (response.data?.data) {
-            console.log(`📊 JSearch jobs count: ${response.data.data.length}`);
-            if (response.data.data.length > 0) {
-                console.log(`📋 JSearch first job:`, JSON.stringify(response.data.data[0], null, 2));
+        console.log(`✅ JSearch responded: ${response.status}`);
+        
+        // Check for quota headers
+        if (response.headers['x-rapidapi-quota-left']) {
+            const quotaLeft = parseInt(response.headers['x-rapidapi-quota-left']);
+            console.log(`📊 RapidAPI quota remaining: ${quotaLeft}`);
+            
+            if (quotaLeft <= 5) {
+                console.log(`⚠️ RapidAPI quota very low: ${quotaLeft} requests left`);
             }
-        } else {
-            console.log('⚠️ JSearch: No data field in response');
-            return [];
         }
 
-        const mappedJobs = response.data.data
+        if (!response.data?.data) {
+            throw new Error('No data field in response');
+        }
+
+        return response.data.data
             .filter(job => job && job.job_title && job.employer_name)
             .map(job => ({
                 title: job.job_title,
@@ -822,75 +1040,37 @@ async function searchJSearchRapidAPI(query, filters) {
                 type: job.job_employment_type || 'Full-time',
                 datePosted: job.job_posted_at_datetime_utc || new Date().toISOString()
             }));
-
-        console.log(`🎯 JSearch mapped ${mappedJobs.length} jobs`);
-        return mappedJobs;
-
-    } catch (error) {
-        console.error('❌ JSEARCH ERROR:');
-        console.error('Message:', error.message);
-        console.error('Code:', error.code);
-        console.error('Response status:', error.response?.status);
-        console.error('Response data:', JSON.stringify(error.response?.data, null, 2));
-        return [];
-    }
+    });
 }
 
-// 1. ADZUNA - Debug version with comprehensive logging
-async function searchAdzunaJobs(query, filters) {
-    const ADZUNA_APP_ID = process.env.ADZUNA_APP_ID;
-    const ADZUNA_API_KEY = process.env.ADZUNA_API_KEY;
-    
-    console.log('\n🔍 === ADZUNA DEBUG START ===');
-    console.log('ADZUNA_APP_ID exists:', !!ADZUNA_APP_ID);
-    console.log('ADZUNA_API_KEY exists:', !!ADZUNA_API_KEY);
-    
-    if (ADZUNA_APP_ID) console.log('ADZUNA_APP_ID length:', ADZUNA_APP_ID.length);
-    if (ADZUNA_API_KEY) console.log('ADZUNA_API_KEY length:', ADZUNA_API_KEY.length);
-    
-    if (!ADZUNA_APP_ID || !ADZUNA_API_KEY) {
-        console.log('❌ Adzuna: Missing credentials');
-        return [];
-    }
+// Replace original function with enhanced version
+const searchJSearchRapidAPI = searchJSearchRapidAPIWithDetection;
 
-    try {
-        const requestUrl = 'https://api.adzuna.com/v1/api/jobs/us/search/1';
-        const params = {
-            app_id: ADZUNA_APP_ID,
-            app_key: ADZUNA_API_KEY,
-            what: query.replace('remote ', ''), // Remove 'remote' from query
-            where: 'remote',
-            results_per_page: 50,
-            sort_by: 'relevance'
-        };
+// 1. ADZUNA - Debug version with comprehensive logging
+async function searchAdzunaJobsWithDetection(query, filters) {
+    return makeApiCallWithExhaustionDetection('Adzuna', async () => {
+        const ADZUNA_APP_ID = process.env.ADZUNA_APP_ID;
+        const ADZUNA_API_KEY = process.env.ADZUNA_API_KEY;
         
-        console.log('📍 Adzuna request URL:', requestUrl);
-        console.log('📋 Adzuna request params:', JSON.stringify(params, null, 2));
-        
-        const response = await axios.get(requestUrl, {
-            params: params,
-            timeout: 15000,
-            headers: {
-                'User-Agent': 'JobMatcher/1.0'
-            }
+        const response = await axios.get('https://api.adzuna.com/v1/api/jobs/us/search/1', {
+            params: {
+                app_id: ADZUNA_APP_ID,
+                app_key: ADZUNA_API_KEY,
+                what: query.replace('remote ', ''),
+                where: 'remote',
+                results_per_page: 50,
+                sort_by: 'relevance'
+            },
+            timeout: 15000
         });
 
-        console.log(`✅ Adzuna HTTP status: ${response.status}`);
-        console.log(`📊 Adzuna response headers:`, response.headers);
-        console.log(`📊 Adzuna response keys:`, Object.keys(response.data || {}));
-        console.log(`📊 Adzuna full response:`, JSON.stringify(response.data).substring(0, 1000));
-        
-        if (response.data?.results) {
-            console.log(`📊 Adzuna jobs count: ${response.data.results.length}`);
-            if (response.data.results.length > 0) {
-                console.log(`📋 Adzuna first job:`, JSON.stringify(response.data.results[0], null, 2));
-            }
-        } else {
-            console.log('⚠️ Adzuna: No results field in response');
-            return [];
+        console.log(`✅ Adzuna responded: ${response.status}`);
+
+        if (!response.data?.results) {
+            throw new Error('No results field in response');
         }
 
-        const mappedJobs = response.data.results.map(job => ({
+        return response.data.results.map(job => ({
             title: job.title,
             company: job.company?.display_name || 'Unknown Company',
             location: job.location?.display_name || 'Remote',
@@ -901,22 +1081,195 @@ async function searchAdzunaJobs(query, filters) {
             type: job.contract_time || 'Full-time',
             datePosted: job.created || new Date().toISOString()
         }));
-
-        console.log(`🎯 Adzuna mapped ${mappedJobs.length} jobs`);
-        return mappedJobs;
-        
-    } catch (error) {
-        console.error('❌ ADZUNA ERROR:');
-        console.error('Message:', error.message);
-        console.error('Code:', error.code);
-        console.error('Response status:', error.response?.status);
-        console.error('Response data:', JSON.stringify(error.response?.data, null, 2));
-        console.error('Request URL:', error.config?.url);
-        console.error('Request params:', error.config?.params);
-        return [];
-    }
+    });
 }
 
+// Replace original function with enhanced version
+const searchAdzunaJobs = searchAdzunaJobsWithDetection;
+
+// Enhanced API functions with automatic exhaustion detection
+async function searchTheMuseJobsWithDetection(query, filters) {
+    return makeApiCallWithExhaustionDetection('TheMuse', async () => {
+        const THEMUSE_API_KEY = process.env.THEMUSE_API_KEY;
+        
+        // FIX: Add category parameter and q parameter for search
+        const categories = [];
+        if (query.includes('developer') || query.includes('engineer') || query.includes('programming')) {
+            categories.push('Engineering');
+        }
+        if (query.includes('data') || query.includes('analyst')) {
+            categories.push('Data Science');
+        }
+        if (query.includes('manager') || query.includes('product')) {
+            categories.push('Product');
+        }
+        if (query.includes('design')) {
+            categories.push('Design');
+        }
+        
+        const response = await axios.get('https://www.themuse.com/api/public/jobs', {
+            params: {
+                api_key: THEMUSE_API_KEY,
+                page: 0,
+                limit: 50,
+                location: 'Remote',
+                category: categories.length > 0 ? categories.join(',') : undefined,
+                q: query,
+                level: filters.experience || undefined
+            },
+            timeout: 15000
+        });
+
+        console.log(`✅ TheMuse responded: ${response.status}`);
+
+        if (!response.data?.results) {
+            throw new Error('No results field in response');
+        }
+
+        return response.data.results.map(job => ({
+            title: job.name,
+            company: job.company?.name || 'Unknown Company',
+            location: 'Remote',
+            link: job.refs?.landing_page,
+            source: 'TheMuse',
+            description: job.contents || '',
+            salary: 'Salary not specified',
+            type: job.type || 'Full-time',
+            datePosted: job.publication_date || new Date().toISOString()
+        }));
+    });
+}
+
+async function searchRapidAPIJobsWithDetection(query, filters) {
+    return makeApiCallWithExhaustionDetection('RapidAPI-Jobs', async () => {
+        const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
+        
+        const response = await axios.get('https://jobs-api14.p.rapidapi.com/list', {
+            params: {
+                query: query,
+                location: 'Remote',
+                distance: '1.0',
+                language: 'en_GB',
+                remoteOnly: 'true',
+                datePosted: 'month',
+                jobType: 'fulltime',
+                index: '0'
+            },
+            headers: {
+                'X-RapidAPI-Key': RAPIDAPI_KEY,
+                'X-RapidAPI-Host': 'jobs-api14.p.rapidapi.com'
+            },
+            timeout: 15000
+        });
+
+        console.log(`✅ RapidAPI-Jobs responded: ${response.status}`);
+
+        if (!response.data?.jobs) {
+            throw new Error('No jobs field in response');
+        }
+
+        return response.data.jobs.map(job => ({
+            title: job.title,
+            company: job.company || 'Unknown Company',
+            location: job.location || 'Remote',
+            link: job.url,
+            source: 'RapidAPI-Jobs',
+            description: job.description || '',
+            salary: job.salary || 'Salary not specified',
+            type: job.jobType || 'Full-time',
+            datePosted: job.datePosted || new Date().toISOString()
+        }));
+    });
+}
+
+async function searchReedJobsWithDetection(query, filters) {
+    return makeApiCallWithExhaustionDetection('Reed', async () => {
+        const REED_API_KEY = process.env.REED_API_KEY;
+        
+        const response = await axios.get('https://www.reed.co.uk/api/1.0/search', {
+            params: {
+                keywords: query.replace('remote ', ''),
+                locationName: 'Remote',
+                distanceFromLocation: 0,
+                resultsToTake: 50
+            },
+            headers: {
+                'Authorization': `Basic ${Buffer.from(`${REED_API_KEY}:`).toString('base64')}`,
+                'User-Agent': 'JobMatcher/1.0'
+            },
+            timeout: 15000
+        });
+
+        console.log(`✅ Reed responded: ${response.status}`);
+
+        if (!response.data?.results) {
+            throw new Error('No results field in response');
+        }
+
+        return response.data.results.map(job => ({
+            title: job.jobTitle,
+            company: job.employerName || 'Unknown Company',
+            location: 'Remote',
+            link: job.jobUrl,
+            source: 'Reed',
+            description: job.jobDescription || '',
+            salary: job.maximumSalary ? `${job.minimumSalary}-${job.maximumSalary} ${job.currency}` : 'Salary not specified',
+            type: job.employmentType || 'Full-time',
+            datePosted: job.datePosted || new Date().toISOString()
+        }));
+    });
+}
+
+async function searchTheirstackJobsWithDetection(query, filters) {
+    return makeApiCallWithExhaustionDetection('Theirstack', async () => {
+        const THEIRSTACK_API_KEY = process.env.THEIRSTACK_API_KEY;
+        
+        // Check usage limit (free tier has 200 requests)
+        if (theirstackUsageCount >= 200) {
+            throw new Error('Theirstack usage limit reached (200 requests)');
+        }
+        
+        const response = await axios.get('https://api.theirstack.com/v1/jobs/search', {
+            params: {
+                query: query,
+                location: 'Remote',
+                limit: 50
+            },
+            headers: {
+                'Authorization': `Bearer ${THEIRSTACK_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 15000
+        });
+
+        console.log(`✅ Theirstack responded: ${response.status}`);
+        theirstackUsageCount++;
+
+        if (!response.data?.jobs) {
+            throw new Error('No jobs field in response');
+        }
+
+        return response.data.jobs.map(job => ({
+            title: job.title,
+            company: job.company?.name || 'Unknown Company',
+            location: job.location || 'Remote',
+            link: job.url,
+            source: 'Theirstack',
+            description: job.description || '',
+            salary: job.salary?.range ? `${job.salary.range.min}-${job.salary.range.max} ${job.salary.currency}` : 'Salary not specified',
+            type: job.type || 'Full-time',
+            datePosted: job.posted_at || new Date().toISOString()
+        }));
+    });
+}
+
+// Replace original functions with enhanced versions
+const searchTheMuseJobs = searchTheMuseJobsWithDetection;
+const searchRapidAPIJobs = searchRapidAPIJobsWithDetection;
+const searchReedJobs = searchReedJobsWithDetection;
+const searchTheirstackJobs = searchTheirstackJobsWithDetection;
+
+// Original functions (now replaced by enhanced versions above)
 async function searchTheMuseJobs(query, filters) {
     const THEMUSE_API_KEY = process.env.THEMUSE_API_KEY;
     if (!THEMUSE_API_KEY) {

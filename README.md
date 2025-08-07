@@ -28,6 +28,8 @@ An intelligent web application that analyzes your resume, extracts your skills, 
 
 🚫 **Zero Dummy Data**: All features work with real data only - no test or hardcoded information
 
+🤖 **Automated API Exhaustion Detection**: Intelligent system that automatically detects when job APIs are out of credits or experiencing issues, marks them as exhausted, and skips them in future searches until they reset (hourly)
+
 ## ⚠️ Known Issues
 
 ### **Occasional Timeout Bug**
@@ -193,6 +195,70 @@ RAPIDAPI_KEY=your_rapidapi_key_here
 5. **Apply to Jobs**
    - Click "Apply Now" to go directly to the job application page
    - Save interesting positions for later review
+
+## 🤖 Automated API Exhaustion Detection System
+
+The application includes an intelligent system that automatically detects and handles API exhaustion to ensure reliable job searches.
+
+### How It Works
+
+**1. Dynamic Status Tracking**
+- Tracks which APIs are exhausted (out of credits)
+- Monitors suspicious failure patterns
+- Automatically resets status every hour
+- Persists across server restarts
+
+**2. Exhaustion Detection Patterns**
+- **HTTP Status Codes**: 429 (Rate Limited), 403 (Forbidden), 402 (Payment Required), 509 (Bandwidth Exceeded)
+- **Error Messages**: Detects quota, limit, exceeded, exhausted, credits, usage, rate limit, etc.
+- **Response Patterns**: Identifies empty responses that might indicate soft limits
+- **Suspicious Failures**: Marks APIs as exhausted after 3 consecutive empty responses
+
+**3. Automatic Handling**
+- Exhausted APIs are automatically skipped in future searches
+- System continues with available APIs
+- Status resets hourly to retry previously exhausted APIs
+- Real-time logging of exhaustion events
+
+**4. Status Monitoring**
+- View current API status via `/api-status` endpoint
+- Manual reset available via `/reset-api-status` endpoint
+- Status included in final job search response
+
+### API Status Endpoints
+
+**Get Current Status**
+```bash
+GET /api-status
+```
+Returns:
+```json
+{
+  "timestamp": "2024-01-01T12:00:00.000Z",
+  "exhaustedApis": ["Adzuna", "TheMuse"],
+  "suspiciousApis": {"Reed": 2},
+  "lastResetTime": "2024-01-01T11:00:00.000Z",
+  "nextResetIn": 45,
+  "totalExhausted": 2
+}
+```
+
+**Manual Reset**
+```bash
+POST /reset-api-status
+```
+Returns:
+```json
+{
+  "message": "API status reset successfully"
+}
+```
+
+### Benefits
+- **Reliability**: No more failed searches due to exhausted APIs
+- **Efficiency**: Automatically focuses on working APIs
+- **Transparency**: Clear visibility into API status
+- **Self-Healing**: Automatic recovery when APIs become available again
 
 ## 🔧 API Endpoints
 
