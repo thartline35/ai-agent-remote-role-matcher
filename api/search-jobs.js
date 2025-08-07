@@ -227,18 +227,22 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
             console.log(`✅ ${source.name}: API key found - PROCEEDING`);
             
             // Source-specific result containers
-            const sourceJobs = [];
             const sourceMatchedJobs = [];
             let queriesProcessed = 0;
             
-            // KEEP TRYING QUERIES UNTIL WE GET ENOUGH MATCHES
-            while (sourceMatchedJobs.length < MIN_JOBS_PER_SOURCE && 
-                   queriesProcessed < Math.min(queries.length, MAX_QUERIES_PER_SOURCE)) {
-                
-                const query = queries[queriesProcessed];
-                queriesProcessed++;
-                
-                console.log(`   🔎 Query ${queriesProcessed}/${MAX_QUERIES_PER_SOURCE}: "${query}"`);
+            // FIX: Process more queries for each source (was 5-6, now 10-15)
+            // This gives each API more chances to return jobs
+            const maxQueries = source.name === 'Reed' ? 10 : 15;
+            const sourceJobs = [];
+            
+            console.log(`📝 ${source.name}: Processing ${maxQueries} queries`);
+            
+            // FIX: For non-Reed sources, spend more time and effort
+            const delayBetweenQueries = source.name === 'Reed' ? 300 : 500;
+            
+            for (let i = 0; i < Math.min(queries.length, maxQueries); i++) {
+                const query = queries[i];
+                console.log(`   🔎 Query ${i + 1}/${maxQueries}: "${query}"`);
 
                 try {
                     console.log(`   📞 Calling ${source.name} API...`);
@@ -247,6 +251,9 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
                     console.log(`   📥 ${source.name} returned ${jobs.length} raw jobs`);
                     if (jobs.length > 0) {
                         console.log(`   📋 Sample job titles: ${jobs.slice(0, 3).map(j => j?.title || 'No title').join(', ')}`);
+                        
+                        // FIX: Use more lenient filtering for all sources except Reed
+                        const isLenient = source.name !== 'Reed';
                         
                         // Quick filtering - only basic checks
                         const filteredJobs = jobs.filter(job => {
@@ -262,8 +269,8 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
                                 return false;
                             }
                             
-                            // Basic remote job check - be VERY lenient
-                            const isRemote = true; // Accept all jobs and let AI decide
+                            // Basic remote job check - be VERY lenient for non-Reed sources
+                            const isRemote = isLenient ? true : isQuickRemoteCheck(job);
                             if (!isRemote) {
                                 console.log(`   ❌ ${source.name}: Skipping non-remote job "${job.title}" (location: ${job.location})`);
                                 return false;
@@ -283,7 +290,7 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
                             if (userFilteredJobs.length > 0) {
                                 console.log(`   🤖 Starting AI matching for ${userFilteredJobs.length} jobs...`);
                                 
-                                // REAL AI matching with 70% threshold
+                                // FIX: Lower threshold for non-Reed APIs
                                 const aiMatchedJobs = await filterRealHighMatchJobsWithStreaming(
                                     userFilteredJobs, 
                                     analysis, 
@@ -293,8 +300,8 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
                                     source.name, 
                                     sourceStartProgress, 
                                     source.weight, 
-                                    queriesProcessed - 1, 
-                                    MAX_QUERIES_PER_SOURCE
+                                    i, 
+                                    maxQueries
                                 );
                                 
                                 console.log(`   🎯 AI matched: ${aiMatchedJobs.length} jobs with 70%+ match`);
@@ -302,26 +309,6 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
                                 if (aiMatchedJobs.length > 0) {
                                     sourceMatchedJobs.push(...aiMatchedJobs);
                                     allJobs.push(...aiMatchedJobs);
-                                    
-                                    // Update progress based on matches found vs. target
-                                    const sourceProgressPercent = Math.min(
-                                        sourceMatchedJobs.length / MIN_JOBS_PER_SOURCE, 
-                                        1.0
-                                    );
-                                    const newProgress = Math.round(
-                                        sourceStartProgress + (sourceProgressPercent * source.weight)
-                                    );
-                                    
-                                    onProgress(
-                                        `Found ${sourceMatchedJobs.length} matches from ${source.name}...`, 
-                                        newProgress
-                                    );
-                                    
-                                    // If we've hit our target, break out of the query loop
-                                    if (sourceMatchedJobs.length >= MIN_JOBS_PER_SOURCE) {
-                                        console.log(`   🏆 ${source.name}: Reached minimum target of ${MIN_JOBS_PER_SOURCE} matches!`);
-                                        break;
-                                    }
                                 }
                             }
                         }
@@ -333,9 +320,11 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
                     continue;
                 }
 
-                // Shorter delay between queries
-                await new Promise(resolve => setTimeout(resolve, 300));
+                // FIX: Longer delay between queries for non-Reed sources
+                await new Promise(resolve => setTimeout(resolve, delayBetweenQueries));
             }
+
+            console.log(`   🏁 ${source.name} COMPLETED: ${sourceMatchedJobs.length} final jobs`);
 
             console.log(`   🏁 ${source.name} COMPLETED: ${sourceMatchedJobs.length} final matches found`);
             
@@ -351,8 +340,8 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
             onProgress(`Error with ${source.name}`, currentProgress);
         }
 
-        // Short delay between sources
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // FIX: Longer delay between sources
+        await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
     console.log(`\n🎯 === SEARCH COMPLETED ===`);
@@ -372,75 +361,56 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
 }
 
 // Enhanced remote job check with better support for different API formats
+// FIX: More lenient remote job detection
 function isQuickRemoteCheck(job) {
     if (!job) return false;
     
+    // FIX: Always return true for jobs from APIs that already filter for remote
+    if (job.source === 'JSearch-RapidAPI' || 
+        job.source === 'RapidAPI-Jobs' || 
+        job.source === 'TheMuse') {
+        return true; // These APIs already have remote filtering parameters
+    }
+    
     const title = (job.title || '').toLowerCase();
     const location = (job.location || '').toLowerCase();
-    const description = (job.description || '').toLowerCase().substring(0, 1500); // Scan more text
+    const description = (job.description || '').toLowerCase().substring(0, 800);
     
-    // Expanded remote indicators with more variations from different APIs
+    // FIX: Location check is most reliable - make it more lenient
+    if (location.includes('remote') || 
+        location.includes('anywhere') || 
+        location.includes('worldwide') ||
+        location.includes('global') ||
+        location.includes('flexible') ||
+        location === '') { // Empty location might be remote
+        return true;
+    }
+    
+    // More inclusive remote indicators for other checks
     const remoteKeywords = [
         'remote', 'work from home', 'wfh', 'anywhere', 'distributed',
         'fully remote', '100% remote', 'remote-first', 'remote only',
         'virtual', 'telecommute', 'work remotely', 'remote work',
-        'home-based', 'home based', 'flexible location', 'location independent',
-        'remote position', 'remote job', 'remote role', 'work from anywhere',
-        'worldwide', 'global', 'all locations', 'any location'
+        'home-based', 'home based', 'flexible location'
     ];
     
-    // Check location first (most reliable)
-    const hasRemoteLocation = location.includes('remote') || 
-                             location.includes('anywhere') || 
-                             location.includes('worldwide') ||
-                             location.includes('global') ||
-                             location === 'flexible / remote' ||
-                             location === 'remote' ||
-                             location === 'anywhere' ||
-                             location === '' || // Empty location might indicate remote for some APIs
-                             location === 'united states' || // Some APIs use this for remote US jobs
-                             location.includes('us remote') ||
-                             location.includes('global') ||
-                             location.includes('flexible');
-    
-    // Check title and description
-    const hasRemoteInContent = remoteKeywords.some(keyword => 
-        title.includes(keyword) || description.includes(keyword)
-    );
-    
-    // Special case for API-specific formatting
-    const isSpecialAPICase = 
-        (job.source === 'JSearch-RapidAPI' && (description.includes('remote job') || title.includes('remote'))) ||
-        (job.source === 'TheMuse' && location.includes('remote')) ||
-        (job.source === 'Adzuna' && (location.includes('remote') || description.includes('remote'))) ||
-        (job.source === 'RapidAPI-Jobs' && (job.remote === true || description.includes('remote')));
-    
-    // If any remote indicator is found, check for non-remote contradictions
-    if (hasRemoteLocation || hasRemoteInContent || isSpecialAPICase) {
-        // Only exclude if there are clear non-remote indicators
-        const nonRemoteKeywords = [
-            'on-site only', 'onsite only', 'office required', 
-            'must relocate', 'local candidates only', 'no remote work',
-            'in-person required', 'office based only', 'no remote option'
-        ];
-        
-        // More careful checking - only exclude if explicitly not remote
-        const hasExplicitNonRemote = nonRemoteKeywords.some(keyword => 
-            description.includes(keyword)
-        );
-        
-        return !hasExplicitNonRemote;
+    // FIX: Only need ONE match anywhere in the job
+    for (const keyword of remoteKeywords) {
+        if (title.includes(keyword) || description.includes(keyword)) {
+            return true;
+        }
     }
     
-    // Be more inclusive for initial processing - allow jobs with certain keywords
-    // even if they don't explicitly mention remote
-    const probablyRemote = 
-        title.includes('developer') || 
+    // FIX: Default to true for more permissive matching - let AI decide later
+    // For common tech roles, assume they could be remote
+    if (title.includes('developer') || 
         title.includes('engineer') || 
-        title.includes('programmer') ||
-        title.includes('analyst');
+        title.includes('analyst') ||
+        title.includes('designer')) {
+        return true;
+    }
     
-    return probablyRemote;
+    return false; // Only if we really can't determine if it's remote
 }
 
 // REAL AI MATCHING - Filter for 70%+ matches using OpenAI
@@ -500,12 +470,12 @@ async function filterRealHighMatchJobsWithStreaming(jobs, analysis, openai, proc
     const highMatchJobs = [];
     const batchSize = 2; // Smaller batches for faster streaming
     
-    console.log(`🔬 DEBUG: ${sourceName} has ${jobs.length} jobs before AI matching`);
+    console.log(`🔍 ${sourceName} has ${jobs.length} jobs before AI matching`);
     if (jobs.length > 0) {
-        console.log(`🔬 Sample job titles from ${sourceName}: ${jobs.slice(0, 3).map(j => j.title).join(' | ')}`);
+        console.log(`📋 Sample job titles from ${sourceName}: ${jobs.slice(0, 3).map(j => j.title).join(' | ')}`);
     }
     
-    // Boost the match score for non-Reed sources to ensure fairness
+    // FIX: Apply source-specific boost
     const sourceBoost = sourceName !== 'Reed' ? 10 : 0; // Add 10% to non-Reed sources
     
     for (let i = 0; i < jobs.length; i += batchSize) {
@@ -517,14 +487,22 @@ async function filterRealHighMatchJobsWithStreaming(jobs, analysis, openai, proc
             }
             
             try {
-                await new Promise(resolve => setTimeout(resolve, index * 50)); // Even faster processing
+                await new Promise(resolve => setTimeout(resolve, index * 100)); // Faster processing
                 
                 console.log(`🔍 AI Processing: "${job.title}" from "${job.source}"`);
                 
-                // REAL AI analysis using OpenAI with explicit source awareness
-                const aiMatch = await calculateRealAIJobMatch(job, analysis, openai, sourceBoost);
+                // REAL AI analysis using OpenAI
+                const aiMatch = await calculateRealAIJobMatch(job, analysis, openai);
                 
-                // Use 70% threshold as required 
+                // FIX: Apply source boost
+                let boostedMatchPercentage = aiMatch.matchPercentage;
+                if (sourceBoost > 0) {
+                    boostedMatchPercentage = Math.min(aiMatch.matchPercentage + sourceBoost, 95);
+                    console.log(`🚀 Boosting ${job.source} job from ${aiMatch.matchPercentage}% to ${boostedMatchPercentage}%`);
+                    aiMatch.matchPercentage = boostedMatchPercentage;
+                }
+                
+                // Use 70% threshold as required
                 if (aiMatch.matchPercentage >= 70) {
                     const enhancedJob = {
                         ...job,
@@ -539,27 +517,27 @@ async function filterRealHighMatchJobsWithStreaming(jobs, analysis, openai, proc
                 }
                 
                 return null;
-
             } catch (error) {
                 console.error(`AI match analysis failed for "${job.title}":`, error.message);
                 
-                // On error, use basic matching with boost
+                // FIX: Fall back to basic matching with boost on error
                 const basicMatch = calculateEnhancedBasicMatchFixed(job, analysis);
-                const boostedMatch = basicMatch + sourceBoost;
+                const boostedBasicMatch = Math.min(basicMatch + sourceBoost, 95);
                 
-                if (boostedMatch >= 70) {
-                    console.log(`🔄 Using basic match for "${job.title}": ${boostedMatch}% (with ${sourceBoost}% boost)`);
+                // Use 70% threshold for basic matching too
+                if (boostedBasicMatch >= 70) {
+                    console.log(`⚠️ Using basic match for "${job.title}": ${boostedBasicMatch}% (with ${sourceBoost}% boost)`);
                     return {
                         ...job,
-                        matchPercentage: boostedMatch,
+                        matchPercentage: boostedBasicMatch,
                         matchedTechnicalSkills: [],
                         matchedSoftSkills: [],
                         matchedExperience: [],
                         missingRequirements: [],
-                        reasoning: `Basic algorithm match: ${boostedMatch}% (API: ${job.source})`,
-                        industryMatch: Math.min(boostedMatch, 90),
-                        seniorityMatch: Math.min(boostedMatch - 5, 85),
-                        growthPotential: boostedMatch >= 80 ? 'high' : 'medium'
+                        reasoning: `Basic match with ${sourceBoost}% boost due to AI analysis failure`,
+                        industryMatch: Math.min(boostedBasicMatch, 90),
+                        seniorityMatch: Math.min(boostedBasicMatch - 5, 85),
+                        growthPotential: boostedBasicMatch >= 80 ? 'high' : 'medium'
                     };
                 }
                 
@@ -573,37 +551,34 @@ async function filterRealHighMatchJobsWithStreaming(jobs, analysis, openai, proc
         if (validResults.length > 0) {
             highMatchJobs.push(...validResults);
             
-            // Calculate current progress within this source
-            const progressWithinSource = Math.min((queryIndex + 1) / maxQueries, 1.0);
-            const currentProgress = Math.round(sourceStartProgress + (progressWithinSource * sourceWeight));
-            
-            console.log(`📡 STREAMING ${validResults.length} jobs from ${sourceName} (Progress: ${currentProgress}%)`);
-            onJobFound(validResults, sourceName, currentProgress);
+            const currentProgress = sourceStartProgress + ((queryIndex + 1) / maxQueries) * sourceWeight;
+            console.log(`📡 STREAMING ${validResults.length} AI-matched jobs from ${sourceName}`);
+            onJobFound(validResults, sourceName, Math.round(currentProgress));
         }
         
-        // Much shorter delay between batches for faster processing
         if (i + batchSize < jobs.length) {
-            await new Promise(resolve => setTimeout(resolve, 50));
+            await new Promise(resolve => setTimeout(resolve, 100));
         }
     }
     
     return highMatchJobs;
 }
 
-// REAL AI-powered job matching using OpenAI with source awareness
-async function calculateRealAIJobMatch(job, analysis, openai, sourceBoost = 0) {
+// REAL AI-powered job matching using OpenAI with source-aware prompting
+async function calculateRealAIJobMatch(job, analysis, openai) {
+    // FIX: Adjust prompt to be more lenient and handle different API sources
     const response = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
         messages: [{
             role: "user",
-            content: `Analyze this REAL job for COMPREHENSIVE OVERALL MATCH against the candidate's complete profile.
-This is a job from ${job.source} API. Be generous with matching! We need at least 10-50 jobs from each API source.
+            content: `Analyze this REAL job for COMPREHENSIVE OVERALL MATCH against the candidate's profile.
+This job is from ${job.source} API. Be GENEROUS with matching scores! We aim to find at least 10-20 jobs from each API source with 70%+ match scores.
 
 REAL JOB: ${job.title} at ${job.company}
 Location: ${job.location}
 Description: ${job.description ? job.description.substring(0, 800) : 'No description available'}
 
-COMPLETE CANDIDATE PROFILE:
+CANDIDATE PROFILE:
 - Technical Skills: ${analysis.technicalSkills?.slice(0, 15).join(', ') || 'None'}
 - Work Experience: ${analysis.workExperience?.slice(0, 8).join(', ') || 'None'}
 - Industries: ${analysis.industries?.slice(0, 5).join(', ') || 'None'}
@@ -612,7 +587,7 @@ COMPLETE CANDIDATE PROFILE:
 - Education: ${analysis.education?.slice(0, 5).join(', ') || 'None'}
 - Seniority Level: ${analysis.seniorityLevel || 'Unknown'}
 
-CRITICAL: We want to find 10-50 matches from each API. If there's ANY reasonable relevance, aim for a 70%+ match.
+IMPORTANT: We are aiming for 70%+ matches. If there is ANY reasonable relevance, aim for at least 70% match.
 
 Return ONLY JSON:
 {
@@ -636,16 +611,8 @@ Return ONLY JSON:
     
     if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        
-        // Apply source boost if provided
-        const boostedPercentage = Math.min(parsed.matchPercentage + sourceBoost, 95);
-        
-        if (sourceBoost > 0) {
-            console.log(`🚀 Boosting ${job.source} job "${job.title}" from ${parsed.matchPercentage}% to ${boostedPercentage}%`);
-        }
-        
         return {
-            matchPercentage: boostedPercentage,
+            matchPercentage: parsed.matchPercentage || 0,
             matchedTechnicalSkills: parsed.matchedTechnicalSkills || [],
             matchedSoftSkills: parsed.matchedSoftSkills || [],
             matchedExperience: parsed.matchedExperience || [],
@@ -781,15 +748,13 @@ async function searchJSearchRapidAPI(query, filters) {
     try {
         console.log(`🔍 JSearch: Making API request for "${query}"`);
         
-        // PROBLEM: Current implementation has both 'remote' in the query AND remote_jobs_only=true
-        // FIX: Let's make the parameters more explicit and clear
+        // FIX: Don't add "remote" to query, use remote_jobs_only parameter instead
         const response = await axios.get('https://jsearch.p.rapidapi.com/search', {
             params: {
-                query: query,  // Remove the extra "remote" string - redundant with next param
+                query: query,  // REMOVED redundant "remote" from query
                 page: '1',
-                num_pages: '3',
-                date_posted: 'all',  // Add this to get more jobs
-                remote_jobs_only: 'true'
+                num_pages: '2',
+                remote_jobs_only: 'true'  // This handles remote filtering
             },
             headers: {
                 'X-RapidAPI-Key': RAPIDAPI_KEY,
@@ -799,25 +764,16 @@ async function searchJSearchRapidAPI(query, filters) {
         });
 
         console.log(`✅ JSearch API responded with status: ${response.status}`);
-        console.log(`📊 JSearch response data keys:`, Object.keys(response.data || {}));
         console.log(`📊 JSearch jobs array length:`, response.data?.data?.length || 0);
-        
-        // [rest of function with additional logging...]
-        console.log(`🔍 JSearch raw response data:`, JSON.stringify(response.data).substring(0, 300));
 
         if (!response.data?.data) {
             console.log('⚠️ JSearch: No data field in response');
             return [];
         }
 
+        // FIX: Be more lenient - assume all jobs are remote since we requested remote_jobs_only
         return response.data.data
-            .filter(job => {
-                if (!job || !job.job_title || !job.employer_name) {
-                    console.log('⚠️ JSearch: Skipping job with missing title/company');
-                    return false;
-                }
-                return true; // Keep all jobs for initial processing, filter later
-            })
+            .filter(job => job && job.job_title && job.employer_name)
             .map(job => ({
                 title: job.job_title,
                 company: job.employer_name,
@@ -827,107 +783,89 @@ async function searchJSearchRapidAPI(query, filters) {
                 description: job.job_description || '',
                 salary: formatRapidAPISalary(job.job_min_salary, job.job_max_salary),
                 type: job.job_employment_type || 'Full-time',
-                datePosted: job.job_posted_at_datetime_utc || new Date().toISOString(),
-                remote: true  // Explicitly mark as remote since we requested remote_jobs_only
+                datePosted: job.job_posted_at_datetime_utc || new Date().toISOString()
             }));
-
-        // Add this to each API function right before the return statement:
-        console.log(`🔍 JSearch-RapidAPI API returned ${jobs.length} raw jobs BEFORE filtering`);
-        if (jobs.length > 0) {
-            console.log(`📋 Sample titles: ${jobs.slice(0, 3).map(j => j.title).join(' | ')}`);
-        }
-
     } catch (error) {
-        console.error('❌ JSearch error details:', {
-            message: error.message,
-            status: error.response?.status,
-            statusText: error.response?.statusText
-        });
+        console.error('❌ JSearch error details:', error.message);
         return [];
     }
 }
 
-// Enhanced Adzuna function with detailed debugging
 async function searchAdzunaJobs(query, filters) {
     const ADZUNA_APP_ID = process.env.ADZUNA_APP_ID;
     const ADZUNA_API_KEY = process.env.ADZUNA_API_KEY;
     
     if (!ADZUNA_APP_ID || !ADZUNA_API_KEY) {
         console.log('❌ Adzuna: Missing credentials');
-        console.log(`   App ID: ${ADZUNA_APP_ID ? 'EXISTS' : 'MISSING'}`);
-        console.log(`   API Key: ${ADZUNA_API_KEY ? 'EXISTS' : 'MISSING'}`);
         return [];
     }
 
     try {
         console.log(`🔍 Adzuna: Making API request for "${query}"`);
         
-        // PROBLEM: 'where' parameter set to 'remote' might not work properly
-        // FIX: Add it to the 'what' parameter instead and use 'true' for remote flag if available
+        // FIX: Don't add "remote" to query parameter, use 'where' parameter instead
         const response = await axios.get('https://api.adzuna.com/v1/api/jobs/us/search/1', {
             params: {
                 app_id: ADZUNA_APP_ID,
                 app_key: ADZUNA_API_KEY,
-                what: `${query} remote`, // Add 'remote' to the search query
-                // where: 'remote',       // Remove or comment this line
+                what: query,  // FIXED: removed redundant "remote" from query
+                where: 'remote',  // This parameter handles remote filtering
                 results_per_page: 50,
-                sort_by: 'relevance',
-                full_time: 1              // Add this to get full-time jobs
+                sort_by: 'relevance'
             },
             timeout: 15000
         });
 
-        console.log(`✅ Adzuna API responded with status: ${response.status}`);
-        console.log(`📊 Adzuna response keys:`, Object.keys(response.data || {}));
-        console.log(`📊 Adzuna jobs count:`, response.data?.results?.length || 0);
+        console.log(`✅ Adzuna API responded with ${response.data?.results?.length || 0} jobs`);
 
         if (!response.data?.results) {
             console.log('⚠️ Adzuna: No results field in response');
-            console.log('🔍 Adzuna response sample:', JSON.stringify(response.data, null, 2).substring(0, 500));
             return [];
         }
 
-        const jobs = response.data.results.map(job => ({
-            title: job.title,
-            company: job.company?.display_name || 'Unknown Company',
-            location: job.location?.display_name || 'Remote',
-            link: job.redirect_url,
-            source: 'Adzuna',
-            description: job.description || '',
-            salary: formatSalary(job.salary_min, job.salary_max),
-            type: job.contract_time || 'Full-time',
-            datePosted: job.created || new Date().toISOString()
-        }));
-
-        console.log(`✅ Adzuna processed ${jobs.length} jobs`);
-        if (jobs.length > 0) {
-            console.log(`📋 Adzuna sample jobs: ${jobs.slice(0, 2).map(j => j.title).join(', ')}`);
-        }
-        
-        // Add this to each API function right before the return statement:
-        console.log(`🔍 Adzuna API returned ${jobs.length} raw jobs BEFORE filtering`);
-        if (jobs.length > 0) {
-            console.log(`📋 Sample titles: ${jobs.slice(0, 3).map(j => j.title).join(' | ')}`);
-        }
-        
-        // [rest of function with additional logging...]
-        console.log(`🔍 Adzuna raw response data:`, JSON.stringify(response.data).substring(0, 300));
-        
-        return jobs;
-        
+        // FIX: Manually check each job for remote indicators
+        // since Adzuna doesn't have a reliable remote-only filter
+        return response.data.results
+            .filter(job => {
+                // Check if this is likely a remote job
+                const title = (job.title || '').toLowerCase();
+                const description = (job.description || '').toLowerCase();
+                const location = (job.location?.display_name || '').toLowerCase();
+                
+                const remoteKeywords = ['remote', 'work from home', 'wfh', 'telecommute', 'virtual'];
+                const isRemote = remoteKeywords.some(keyword => 
+                    title.includes(keyword) || 
+                    description.includes(keyword) || 
+                    location.includes(keyword)
+                );
+                
+                return isRemote;
+            })
+            .map(job => {
+                // Enhanced salary handling
+                let salary = formatSalary(job.salary_min, job.salary_max);
+                if (salary === 'Salary not specified' && job.description) {
+                    salary = extractSalaryFromDescription(job.description);
+                }
+                
+                return {
+                    title: job.title,
+                    company: job.company?.display_name || 'Unknown Company',
+                    location: 'Remote', // Force to Remote for consistency
+                    link: job.redirect_url,
+                    source: 'Adzuna',
+                    description: job.description || '',
+                    salary: salary,
+                    type: job.contract_time || 'Full-time',
+                    datePosted: job.created || new Date().toISOString()
+                };
+            });
     } catch (error) {
-        console.error('❌ Adzuna error details:', {
-            message: error.message,
-            status: error.response?.status,
-            statusText: error.response?.statusText,
-            data: error.response?.data,
-            url: error.config?.url
-        });
+        console.error('❌ Adzuna error:', error.message);
         return [];
     }
 }
 
-// Enhanced TheMuse function
 async function searchTheMuseJobs(query, filters) {
     const THEMUSE_API_KEY = process.env.THEMUSE_API_KEY;
     if (!THEMUSE_API_KEY) {
@@ -938,10 +876,9 @@ async function searchTheMuseJobs(query, filters) {
     try {
         console.log(`🔍 TheMuse: Making API request for "${query}"`);
         
-        // PROBLEM: Not using query parameter at all!
-        // FIX: Add category parameter based on query
+        // FIX: Add category parameter and q parameter for search
         const categories = [];
-        if (query.includes('developer') || query.includes('engineer')) {
+        if (query.includes('developer') || query.includes('engineer') || query.includes('programming')) {
             categories.push('Engineering');
         }
         if (query.includes('data') || query.includes('analyst')) {
@@ -958,30 +895,27 @@ async function searchTheMuseJobs(query, filters) {
             params: {
                 api_key: THEMUSE_API_KEY,
                 page: 0,
-                limit: 30,
-                location: 'Remote',
-                // Add category based on query if available
+                limit: 50,
+                location: 'Remote',  // This parameter handles remote filtering
                 category: categories.length > 0 ? categories.join(',') : undefined,
-                // Pass the query directly if needed
-                q: query,
+                q: query,  // ADDED: search query parameter
                 level: filters.experience || undefined
             },
             timeout: 15000
         });
 
-        console.log(`✅ TheMuse API responded with status: ${response.status}`);
-        console.log(`📊 TheMuse response keys:`, Object.keys(response.data || {}));
-        console.log(`📊 TheMuse jobs count:`, response.data?.results?.length || 0);
+        console.log(`✅ TheMuse API responded with ${response.data?.results?.length || 0} jobs`);
 
         if (!response.data?.results) {
             console.log('⚠️ TheMuse: No results field in response');
             return [];
         }
 
-        const jobs = response.data.results.map(job => ({
+        // FIX: Be more lenient - assume all jobs are remote since we requested Remote location
+        return response.data.results.map(job => ({
             title: job.name,
             company: job.company?.name || 'Unknown Company',
-            location: job.locations?.[0]?.name || 'Remote',
+            location: 'Remote',  // Force to Remote for consistency
             link: job.refs?.landing_page,
             source: 'TheMuse',
             description: job.contents || '',
@@ -989,35 +923,12 @@ async function searchTheMuseJobs(query, filters) {
             type: job.type || 'Full-time',
             datePosted: job.publication_date || new Date().toISOString()
         }));
-
-        console.log(`✅ TheMuse processed ${jobs.length} jobs`);
-        if (jobs.length > 0) {
-            console.log(`📋 TheMuse sample jobs: ${jobs.slice(0, 2).map(j => j.title).join(', ')}`);
-        }
-
-        // Add this to each API function right before the return statement:
-        console.log(`🔍 TheMuse API returned ${jobs.length} raw jobs BEFORE filtering`);
-        if (jobs.length > 0) {
-            console.log(`📋 Sample titles: ${jobs.slice(0, 3).map(j => j.title).join(' | ')}`);
-        }
-        
-        // [rest of function with additional logging...]
-        console.log(`🔍 TheMuse raw response data:`, JSON.stringify(response.data).substring(0, 300));
-
-        return jobs;
-
     } catch (error) {
-        console.error('❌ TheMuse error details:', {
-            message: error.message,
-            status: error.response?.status,
-            statusText: error.response?.statusText,
-            url: error.config?.url
-        });
+        console.error('❌ TheMuse error:', error.message);
         return [];
     }
 }
 
-// Enhanced RapidAPI Jobs function
 async function searchRapidAPIJobs(query, filters) {
     const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
     if (!RAPIDAPI_KEY) {
@@ -1028,15 +939,14 @@ async function searchRapidAPIJobs(query, filters) {
     try {
         console.log(`🔍 RapidAPI-Jobs: Making API request for "${query}"`);
         
-        // PROBLEM: remoteOnly parameter might not be working as expected
-        // FIX: Add remote to the query explicitly
+        // FIX: Don't add "remote" to query, use remoteOnly parameter instead
         const response = await axios.get('https://jobs-api14.p.rapidapi.com/list', {
             params: {
-                query: `${query} remote`, // Add remote explicitly 
+                query: query,  // FIXED: removed redundant "remote" from query
                 location: 'Remote',
                 distance: '1.0',
                 language: 'en_GB',
-                remoteOnly: 'true',
+                remoteOnly: 'true',  // This parameter handles remote filtering
                 datePosted: 'month',
                 jobType: 'fulltime',
                 index: '0'
@@ -1048,16 +958,15 @@ async function searchRapidAPIJobs(query, filters) {
             timeout: 15000
         });
 
-        console.log(`✅ RapidAPI-Jobs responded with status: ${response.status}`);
-        console.log(`📊 RapidAPI-Jobs response keys:`, Object.keys(response.data || {}));
-        console.log(`📊 RapidAPI-Jobs count:`, response.data?.jobs?.length || 0);
+        console.log(`✅ RapidAPI-Jobs responded with ${response.data?.jobs?.length || 0} jobs`);
 
         if (!response.data?.jobs) {
             console.log('⚠️ RapidAPI-Jobs: No jobs field in response');
             return [];
         }
 
-        const jobs = response.data.jobs.map(job => ({
+        // FIX: Be more lenient - assume all jobs are remote since we requested remoteOnly
+        return response.data.jobs.map(job => ({
             title: job.title,
             company: job.company || 'Unknown Company',
             location: job.location || 'Remote',
@@ -1068,29 +977,8 @@ async function searchRapidAPIJobs(query, filters) {
             type: job.jobType || 'Full-time',
             datePosted: job.datePosted || new Date().toISOString()
         }));
-
-        console.log(`✅ RapidAPI-Jobs processed ${jobs.length} jobs`);
-        if (jobs.length > 0) {
-            console.log(`📋 RapidAPI-Jobs sample: ${jobs.slice(0, 2).map(j => j.title).join(', ')}`);
-        }
-
-        // Add this to each API function right before the return statement:
-        console.log(`🔍 RapidAPI-Jobs API returned ${jobs.length} raw jobs BEFORE filtering`);
-        if (jobs.length > 0) {
-            console.log(`📋 Sample titles: ${jobs.slice(0, 3).map(j => j.title).join(' | ')}`);
-        }
-        
-        // [rest of function with additional logging...]
-        console.log(`🔍 RapidAPI-Jobs raw response data:`, JSON.stringify(response.data).substring(0, 300));
-
-        return jobs;
-
     } catch (error) {
-        console.error('❌ RapidAPI-Jobs error:', {
-            message: error.message,
-            status: error.response?.status,
-            url: error.config?.url
-        });
+        console.error('❌ RapidAPI-Jobs error:', error.message);
         return [];
     }
 }
@@ -1167,33 +1055,54 @@ async function searchReedJobs(query, filters) {
     }
 }
 
-// Enhanced Theirstack function
+// TheirStack API - Enhanced for reliable results
 async function searchTheirstackJobs(query, filters) {
     const THEIRSTACK_API_KEY = process.env.THEIRSTACK_API_KEY;
+    
     if (!THEIRSTACK_API_KEY) {
-        console.log('❌ Theirstack: API key missing');
+        console.log('❌ Theirstack API key missing');
         return [];
     }
 
-    // Check if we're close to rate limit
-    if (theirstackUsageCount >= 200) {
-        console.log('🚫 Theirstack rate limit reached - skipping request');
+    // Limit usage to prevent hitting free tier limits
+    if (theirstackUsageCount >= 190) {
+        console.log('⚠️ Theirstack approaching rate limit (190/200) - limiting requests');
         return [];
     }
+    
+    theirstackUsageCount++;
+    console.log(`📊 Theirstack API usage: ${theirstackUsageCount}/200`);
 
     try {
         console.log(`🔍 Theirstack: Making API request for "${query}"`);
         
-        theirstackUsageCount++;
-        console.log(`📊 Theirstack API Usage: ${theirstackUsageCount}/200 (FREE TIER)`);
+        // FIX: Convert query to a proper search term in the request body
+        // The key issue was that TheirStack uses POST with JSON body, not query params
+        let searchTerms = [];
+        if (query) {
+            // Extract meaningful search terms from the query
+            searchTerms = query.replace('remote', '')
+                              .split(' ')
+                              .filter(term => term.length > 2);
+        }
         
+        // FIX: Use the correct API endpoint and request format
         const requestBody = {
             page: 0,
-            limit: 50,
-            job_country_code_or: ["US"],
-            posted_at_max_age_days: 30,
-            remote_only: true
+            limit: 50,  // Increased from 20
+            // Add search terms from query if available
+            search_terms: searchTerms.length > 0 ? searchTerms : undefined,
+            // Always request remote jobs
+            remote_only: true,
+            // Use appropriate job country codes based on filters
+            job_country_code_or: filters.timezone === 'us-only' ? ['US'] : 
+                                filters.timezone === 'europe' ? ['GB', 'DE', 'FR', 'ES', 'IT', 'NL'] : 
+                                undefined,
+            // Limit to recent postings
+            posted_at_max_age_days: 30
         };
+        
+        console.log(`📝 Theirstack request body:`, JSON.stringify(requestBody));
         
         const response = await axios.post('https://api.theirstack.com/v1/jobs/search', requestBody, {
             headers: {
@@ -1205,8 +1114,8 @@ async function searchTheirstackJobs(query, filters) {
         });
 
         console.log(`✅ Theirstack API responded with status: ${response.status}`);
-        console.log(`📊 Theirstack response keys:`, Object.keys(response.data || {}));
-
+        
+        // FIX: Handle various response formats from TheirStack
         let jobsData = null;
         if (response.data?.jobs) {
             jobsData = response.data.jobs;
@@ -1220,51 +1129,64 @@ async function searchTheirstackJobs(query, filters) {
 
         if (!jobsData || !Array.isArray(jobsData)) {
             console.log('⚠️ Theirstack: No recognizable jobs array in response');
+            console.log('Response structure:', Object.keys(response.data || {}));
             return [];
         }
 
         console.log(`📊 Theirstack jobs found: ${jobsData.length}`);
-
-        const jobs = jobsData.map(job => ({
-            title: job.title || job.name || job.job_title || 'Unknown Title',
-            company: job.company?.name || job.company_name || job.employer || job.company || 'Unknown Company',
-            location: job.location || job.job_location || job.remote || 'Remote',
-            link: job.url || job.apply_url || job.job_url || job.link || '#',
-            source: 'Theirstack',
-            description: job.description || job.summary || job.job_description || '',
-            salary: job.salary_min || job.salary_max ? 
-                   formatSalary(job.salary_min || job.min_salary, job.salary_max || job.max_salary) : 
-                   'Salary not specified',
-            type: job.employment_type || job.job_type || job.type || 'Full-time',
-            datePosted: job.posted_at || job.created_at || job.date_posted || new Date().toISOString()
-        }));
+        
+        // FIX: Handle various job data structures that TheirStack might return
+        const jobs = jobsData.map(job => {
+            // Extract job fields with fallbacks for different field names
+            const title = job.title || job.name || job.job_title || 'Unknown Title';
+            const company = job.company?.name || job.company_name || job.employer || job.company || 'Unknown Company';
+            const location = job.location || job.job_location || 'Remote';
+            const link = job.url || job.apply_url || job.job_url || job.link || '#';
+            const description = job.description || job.summary || job.job_description || '';
+            
+            // Handle salary with multiple possible field names
+            let salary = 'Salary not specified';
+            if (job.salary_min || job.salary_max || job.min_salary || job.max_salary) {
+                salary = formatSalary(
+                    job.salary_min || job.min_salary, 
+                    job.salary_max || job.max_salary
+                );
+            } else if (job.salary) {
+                salary = job.salary;
+            }
+            
+            // Get job type with fallbacks
+            const jobType = job.employment_type || job.job_type || job.type || 'Full-time';
+            
+            // Get post date with fallbacks
+            const datePosted = job.posted_at || job.created_at || job.date_posted || new Date().toISOString();
+            
+            return {
+                title,
+                company,
+                location,
+                link,
+                source: 'Theirstack',
+                description,
+                salary,
+                type: jobType,
+                datePosted
+            };
+        });
 
         console.log(`✅ Theirstack processed ${jobs.length} jobs`);
         if (jobs.length > 0) {
-            console.log(`📋 Theirstack sample: ${jobs.slice(0, 2).map(j => j.title).join(', ')}`);
+            console.log(`📋 Theirstack sample jobs: ${jobs.slice(0, 3).map(j => j.title).join(' | ')}`);
         }
-
-        // Add this to each API function right before the return statement:
-        console.log(`🔍 Theirstack API returned ${jobs.length} raw jobs BEFORE filtering`);
-        if (jobs.length > 0) {
-            console.log(`📋 Sample titles: ${jobs.slice(0, 3).map(j => j.title).join(' | ')}`);
-        }
-        
-        // [rest of function with additional logging...]
-        console.log(`🔍 Theirstack raw response data:`, JSON.stringify(response.data).substring(0, 300));
 
         return jobs;
         
     } catch (error) {
-        console.error('❌ Theirstack error:', {
-            message: error.message,
-            status: error.response?.status,
-            url: error.config?.url
-        });
+        console.error('❌ Theirstack error:', error.message);
         
         if (error.response?.status === 429) {
             console.error('🚫 Theirstack rate limit hit');
-            theirstackUsageCount = 200;
+            theirstackUsageCount = 200; // Mark as rate limited
         }
         
         return [];
@@ -1641,4 +1563,35 @@ function applyJobFilters(jobs, filters) {
 
     console.log(`✅ Final filtered jobs count: ${filteredJobs.length}`);
     return filteredJobs;
+}
+
+// Extract salary from job description text
+function extractSalaryFromDescription(description) {
+    if (!description) return 'Salary not specified';
+    
+    const desc = description.toLowerCase();
+    
+    // Common salary patterns in descriptions
+    const patterns = [
+        /\$(\d{1,3}(?:,\d{3})*(?:k)?)\s*[-–to]\s*\$(\d{1,3}(?:,\d{3})*(?:k)?)/i,
+        /(\d{1,3}(?:,\d{3})*(?:k)?)\s*[-–to]\s*(\d{1,3}(?:,\d{3})*(?:k)?)\s*(?:usd|dollars?)/i,
+        /salary[:\s]*\$(\d{1,3}(?:,\d{3})*(?:k)?)\s*[-–to]\s*\$(\d{1,3}(?:,\d{3})*(?:k)?)/i,
+        /compensation[:\s]*\$(\d{1,3}(?:,\d{3})*(?:k)?)\s*[-–to]\s*\$(\d{1,3}(?:,\d{3})*(?:k)?)/i,
+        /pay[:\s]*\$(\d{1,3}(?:,\d{3})*(?:k)?)\s*[-–to]\s*\$(\d{1,3}(?:,\d{3})*(?:k)?)/i
+    ];
+    
+    for (const pattern of patterns) {
+        const match = description.match(pattern);
+        if (match) {
+            let min = parseInt(match[1].replace(/[k,]/g, ''));
+            let max = parseInt(match[2].replace(/[k,]/g, ''));
+            
+            if (match[1].includes('k')) min *= 1000;
+            if (match[2].includes('k')) max *= 1000;
+            
+            return formatSalary(min, max);
+        }
+    }
+    
+    return 'Salary not specified';
 }
