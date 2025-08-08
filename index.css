@@ -1597,6 +1597,76 @@
     overflow: hidden;
   }
   
+  .job-description-container {
+    margin-bottom: var(--spacing-6);
+  }
+  
+  .job-description-container h4 {
+    color: var(--neutral-800);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--spacing-3);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+  }
+  
+  .job-description-container h4 i {
+    color: var(--primary-500);
+  }
+  
+  .job-description.collapsed {
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .job-description.expanded {
+    display: block;
+    overflow: visible;
+  }
+  
+  .expand-description-btn,
+  .collapse-description-btn {
+    background: var(--primary-50);
+    color: var(--primary-700);
+    border: 1px solid var(--primary-200);
+    padding: var(--spacing-2) var(--spacing-4);
+    border-radius: var(--border-radius-lg);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    margin-top: var(--spacing-3);
+  }
+  
+  .expand-description-btn:hover,
+  .collapse-description-btn:hover {
+    background: var(--primary-100);
+    border-color: var(--primary-300);
+    transform: translateY(-1px);
+  }
+  
+  .expand-description-btn i,
+  .collapse-description-btn i {
+    font-size: var(--font-size-xs);
+    transition: transform var(--transition-fast);
+  }
+  
+  .expand-description-btn:hover i {
+    transform: translateY(1px);
+  }
+  
+  .collapse-description-btn:hover i {
+    transform: translateY(-1px);
+  }
+  
   .job-skills-category {
     margin-bottom: var(--spacing-6);
     background: var(--neutral-50);

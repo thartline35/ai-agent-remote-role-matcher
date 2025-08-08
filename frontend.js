@@ -753,7 +753,22 @@ class AIJobMatcher {
                 <div class="job-full-details">
                     ${matchBreakdown}
                     ${job.reasoning ? `<div class="job-reasoning"><strong>Comprehensive Analysis:</strong> ${job.reasoning}</div>` : ''}
-                    <p class="job-description">${this.truncateDescription(job.description || 'No description available')}</p>
+                    <div class="job-description-container">
+                        <h4><i class="fas fa-file-alt"></i> Job Description</h4>
+                        <div class="job-description collapsed">
+                            <p>${this.truncateDescription(job.description || 'No description available')}</p>
+                        </div>
+                        <div class="job-description expanded" style="display: none;">
+                            <p>${job.description || 'No description available'}</p>
+                        </div>
+                        ${(job.description && job.description.length > 300) ? `
+                        <button class="expand-description-btn" onclick="this.closest('.job-description-container').querySelector('.job-description.collapsed').style.display='none'; this.closest('.job-description-container').querySelector('.job-description.expanded').style.display='block'; this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+                            <i class="fas fa-chevron-down"></i> Show Full Description
+                        </button>
+                        <button class="collapse-description-btn" style="display: none;" onclick="this.closest('.job-description-container').querySelector('.job-description.collapsed').style.display='block'; this.closest('.job-description-container').querySelector('.job-description.expanded').style.display='none'; this.style.display='none'; this.previousElementSibling.style.display='inline-block';">
+                            <i class="fas fa-chevron-up"></i> Show Less
+                        </button>` : ''}
+                    </div>
                     ${skillsDisplay}
                 </div>
                 
