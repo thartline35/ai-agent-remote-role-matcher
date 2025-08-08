@@ -1061,6 +1061,17 @@
     box-shadow: var(--shadow-md);
   }
   
+  .save-btn.saved {
+    background: var(--success-600);
+    color: var(--pure-white);
+    border-color: var(--success-600);
+  }
+  
+  .save-btn.saved:hover {
+    background: var(--success-700);
+    border-color: var(--success-700);
+  }
+  
   /* ===========================================
      Search Section
      =========================================== */
@@ -1295,6 +1306,114 @@
   .clear-filters:hover {
     background: var(--error-600);
     transform: translateY(-1px);
+  }
+  
+  .view-toggle {
+    display: flex;
+    gap: var(--spacing-2);
+    margin-top: var(--spacing-4);
+  }
+  
+  .view-btn {
+    background: var(--neutral-100);
+    color: var(--neutral-600);
+    border: 1px solid var(--neutral-200);
+    padding: var(--spacing-2) var(--spacing-4);
+    border-radius: var(--border-radius-lg);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+  }
+  
+  .view-btn:hover {
+    background: var(--neutral-200);
+    border-color: var(--neutral-300);
+    color: var(--neutral-700);
+  }
+  
+  .view-btn.active {
+    background: var(--primary-100);
+    color: var(--primary-700);
+    border-color: var(--primary-300);
+  }
+  
+  .saved-jobs-section {
+    margin-top: var(--spacing-8);
+  }
+  
+  .empty-state {
+    text-align: center;
+    padding: var(--spacing-12);
+    color: var(--neutral-600);
+  }
+  
+  .empty-state i {
+    font-size: var(--font-size-4xl);
+    color: var(--neutral-400);
+    margin-bottom: var(--spacing-4);
+  }
+  
+  .empty-state h3 {
+    color: var(--neutral-800);
+    margin-bottom: var(--spacing-2);
+    font-size: var(--font-size-xl);
+  }
+  
+  .empty-state p {
+    color: var(--neutral-600);
+    font-size: var(--font-size-base);
+  }
+  
+  .toast-container {
+    position: fixed;
+    top: var(--spacing-4);
+    right: var(--spacing-4);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2);
+  }
+  
+  .toast {
+    background: var(--neutral-800);
+    color: var(--neutral-100);
+    padding: var(--spacing-3) var(--spacing-4);
+    border-radius: var(--border-radius-lg);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    animation: slide-in-right 0.3s ease-out;
+    max-width: 300px;
+  }
+  
+  .toast.success {
+    background: var(--success-600);
+    color: var(--pure-white);
+  }
+  
+  .toast.error {
+    background: var(--error-600);
+    color: var(--pure-white);
+  }
+  
+  .toast.info {
+    background: var(--primary-600);
+    color: var(--pure-white);
+  }
+  
+  @keyframes slide-in-right {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
   }
   
   /* ===========================================

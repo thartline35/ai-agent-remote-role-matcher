@@ -213,12 +213,36 @@
                                 Clear Filters
                             </button>
                         </div>
+                        <div class="view-toggle">
+                            <button class="view-btn active" id="view-results" onclick="window.aiJobMatcher.showResults()">
+                                <i class="fas fa-list"></i> All Jobs
+                            </button>
+                            <button class="view-btn" id="view-saved" onclick="window.aiJobMatcher.showSavedJobs()">
+                                <i class="fas fa-bookmark"></i> Saved Jobs (<span id="saved-count">0</span>)
+                            </button>
+                        </div>
                     </div>
                     <div class="jobs-grid" id="jobs-grid"></div>
                     <button class="load-more" id="load-more" style="display: none;">
                         <i class="fas fa-plus"></i>
                         Load More Jobs
                     </button>
+                </section>
+
+                <!-- Saved Jobs Section -->
+                <section class="saved-jobs-section" id="saved-jobs-section" style="display: none;">
+                    <div class="results-header">
+                        <h2><i class="fas fa-bookmark"></i> Saved Jobs</h2>
+                        <div class="view-toggle">
+                            <button class="view-btn" id="view-results-saved" onclick="window.aiJobMatcher.showResults()">
+                                <i class="fas fa-list"></i> All Jobs
+                            </button>
+                            <button class="view-btn active" id="view-saved-saved" onclick="window.aiJobMatcher.showSavedJobs()">
+                                <i class="fas fa-bookmark"></i> Saved Jobs (<span id="saved-count-saved">0</span>)
+                            </button>
+                        </div>
+                    </div>
+                    <div class="jobs-grid" id="saved-jobs-container"></div>
                 </section>
 
                 <!-- Error Section -->
@@ -238,6 +262,9 @@
             </footer>
         </div>
     </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
 
     <script src="./frontend.js"></script>
 

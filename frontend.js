@@ -22,6 +22,8 @@ class AIJobMatcher {
         this.searchProgress = 0;
         this.sourcesCompleted = 0;
         this.totalSources = 6;
+        this.savedJobs = this.loadSavedJobs();
+        this.updateSavedCount();
     }
 
     initializeElements() {
@@ -815,9 +817,9 @@ class AIJobMatcher {
                         <i class="fas fa-paper-plane"></i>
                         Apply Now
                     </button>
-                    <button class="save-btn" onclick="this.innerHTML = '<i class=\\'fas fa-check\\'></i> Saved!'">
+                    <button class="save-btn ${this.savedJobs.find(savedJob => savedJob.id === job.id) ? 'saved' : ''}" onclick="window.aiJobMatcher.saveJob(${JSON.stringify(job).replace(/"/g, '&quot;')})">
                         <i class="fas fa-bookmark"></i>
-                        Save Job
+                        ${this.savedJobs.find(savedJob => savedJob.id === job.id) ? 'Saved!' : 'Save Job'}
                     </button>
                 </div>
             </div>
@@ -1174,9 +1176,143 @@ class AIJobMatcher {
     updateProgressBar(percentage) {
         this.progressFill.style.width = `${Math.min(percentage, 100)}%`;
     }
+
+    saveJob(job) {
+        const existingJob = this.savedJobs.find(savedJob => savedJob.id === job.id);
+        if (existingJob) {
+            this.removeSavedJob(job.id);
+            return;
+        }
+
+        const newJob = {
+            ...job,
+            savedAt: new Date().toISOString()
+        };
+        this.savedJobs.push(newJob);
+        this.saveJobsToStorage();
+        this.updateSavedJobsDisplay();
+        this.updateSavedCount();
+        this.updateSaveButtonStates();
+        this.showToast('Job saved!', 'success');
+    }
+
+    removeSavedJob(jobId) {
+        this.savedJobs = this.savedJobs.filter(job => job.id !== jobId);
+        this.saveJobsToStorage();
+        this.updateSavedJobsDisplay();
+        this.updateSavedCount();
+        this.updateSaveButtonStates();
+        this.showToast('Job removed!', 'info');
+    }
+
+    updateSaveButtonStates() {
+        // Update all save buttons in the current view
+        const saveButtons = document.querySelectorAll('.save-btn');
+        saveButtons.forEach(button => {
+            const jobCard = button.closest('.job-card');
+            if (jobCard) {
+                const jobTitle = jobCard.querySelector('.job-title')?.textContent;
+                const jobCompany = jobCard.querySelector('.job-company')?.textContent;
+                
+                // Find the job in saved jobs
+                const savedJob = this.savedJobs.find(job => 
+                    job.title === jobTitle && job.company === jobCompany
+                );
+                
+                if (savedJob) {
+                    button.classList.add('saved');
+                    button.innerHTML = '<i class="fas fa-bookmark"></i> Saved!';
+                } else {
+                    button.classList.remove('saved');
+                    button.innerHTML = '<i class="fas fa-bookmark"></i> Save Job';
+                }
+            }
+        });
+    }
+
+    loadSavedJobs() {
+        const savedJobs = localStorage.getItem('savedJobs');
+        if (savedJobs) {
+            return JSON.parse(savedJobs);
+        }
+        return [];
+    }
+
+    saveJobsToStorage() {
+        localStorage.setItem('savedJobs', JSON.stringify(this.savedJobs));
+    }
+
+    updateSavedJobsDisplay() {
+        const savedJobsContainer = document.getElementById('saved-jobs-container');
+        if (!savedJobsContainer) return;
+
+        savedJobsContainer.innerHTML = '';
+        if (this.savedJobs.length === 0) {
+            savedJobsContainer.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-bookmark"></i>
+                    <h3>No saved jobs yet</h3>
+                    <p>Find some great opportunities and save them for later!</p>
+                </div>
+            `;
+            return;
+        }
+
+        this.savedJobs.forEach(job => {
+            const jobCard = this.createEnhancedJobCard(job);
+            // Mark as saved in the saved jobs view
+            const saveBtn = jobCard.querySelector('.save-btn');
+            saveBtn.classList.add('saved');
+            saveBtn.innerHTML = '<i class="fas fa-bookmark"></i> Saved!';
+            saveBtn.onclick = () => this.removeSavedJob(job.id);
+            savedJobsContainer.appendChild(jobCard);
+        });
+    }
+
+    showToast(message, type = 'info') {
+        const toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) return;
+
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        toastContainer.appendChild(toast);
+
+        setTimeout(() => {
+            toast.remove();
+        }, 3000);
+    }
+
+    showResults() {
+        document.getElementById('results-section').style.display = 'block';
+        document.getElementById('saved-jobs-section').style.display = 'none';
+        
+        // Update button states
+        document.getElementById('view-results').classList.add('active');
+        document.getElementById('view-saved').classList.remove('active');
+        document.getElementById('view-results-saved').classList.remove('active');
+        document.getElementById('view-saved-saved').classList.add('active');
+    }
+
+    showSavedJobs() {
+        document.getElementById('results-section').style.display = 'none';
+        document.getElementById('saved-jobs-section').style.display = 'block';
+        
+        // Update button states
+        document.getElementById('view-results').classList.remove('active');
+        document.getElementById('view-saved').classList.add('active');
+        document.getElementById('view-results-saved').classList.add('active');
+        document.getElementById('view-saved-saved').classList.remove('active');
+        
+        this.updateSavedJobsDisplay();
+    }
+
+    updateSavedCount() {
+        const count = this.savedJobs.length;
+        document.getElementById('saved-count').textContent = count;
+        document.getElementById('saved-count-saved').textContent = count;
+    }
 }
 
-// Initialize the enhanced app when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    new AIJobMatcher();
-});
+// Initialize the global instance
+window.aiJobMatcher = new AIJobMatcher();
