@@ -1,11 +1,22 @@
 // /api/search-jobs.js - DEBUG VERSION with Enhanced Logging for the 4 Failing APIs
 import OpenAI from 'openai';
 import axios from 'axios';
+import dotenv from 'dotenv';
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+// Load environment variables
+dotenv.config({ path: './local.env' });
+
+// Initialize OpenAI client - will be created when needed
+let openai = null;
+
+function getOpenAIClient() {
+    if (!openai) {
+        openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+        });
+    }
+    return openai;
+}
 
 // Theirstack usage tracking (free tier has 200 request limit)
 let theirstackUsageCount = 0;
@@ -362,7 +373,7 @@ export default async function handler(req, res) {
         console.log('🚀 Starting enhanced job search with REAL-TIME streaming...');
 
         // Start job search with streaming callback
-        const result = await scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFound, onProgress);
+        const result = await scrapeJobListingsWithStreaming(analysis, filters, onJobFound, onProgress);
 
         const totalSearchTime = ((Date.now() - searchStartTime) / 1000).toFixed(1);
         console.log(`=== JOB SEARCH COMPLETED ===`);
@@ -415,7 +426,7 @@ export default async function handler(req, res) {
 }
 
 // Modify scrapeJobListingsWithStreaming function to process each API fully before moving on
-async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFound, onProgress) {
+async function scrapeJobListingsWithStreaming(analysis, filters, onJobFound, onProgress) {
     console.log('=== STARTING REAL-TIME JOB SEARCH WITH DEBUGGING ===');
     
     // Set up constants
@@ -543,7 +554,6 @@ async function scrapeJobListingsWithStreaming(analysis, filters, openai, onJobFo
                                 const aiMatchedJobs = await filterRealHighMatchJobsWithStreaming(
                                     userFilteredJobs, 
                                     analysis, 
-                                    openai, 
                                     processedJobKeys, 
                                     onJobFound, 
                                     source.name, 
@@ -656,7 +666,7 @@ function isQuickRemoteCheck(job) {
 }
 
 // REAL AI MATCHING - Filter for 70%+ matches using OpenAI
-async function filterRealHighMatchJobs(jobs, analysis, openai, processedJobs) {
+async function filterRealHighMatchJobs(jobs, analysis, processedJobs) {
     const highMatchJobs = [];
     const batchSize = 3; // Small batches for real AI analysis
     
@@ -674,7 +684,7 @@ async function filterRealHighMatchJobs(jobs, analysis, openai, processedJobs) {
                 console.log(`🔍 Processing job: "${job.title}" from source: "${job.source}"`);
                 
                 // REAL AI analysis using OpenAI
-                const aiMatch = await calculateRealAIJobMatch(job, analysis, openai);
+                const aiMatch = await calculateRealAIJobMatch(job, analysis);
                 
                 if (aiMatch.matchPercentage >= 70) {
                     const enhancedJob = {
@@ -708,7 +718,7 @@ async function filterRealHighMatchJobs(jobs, analysis, openai, processedJobs) {
 }
 
 // REAL AI MATCHING with REAL-TIME streaming - streams jobs as they're processed
-async function filterRealHighMatchJobsWithStreaming(jobs, analysis, openai, processedJobs, onJobFound, sourceName, sourceStartProgress, sourceWeight, queryIndex, maxQueries) {
+async function filterRealHighMatchJobsWithStreaming(jobs, analysis, processedJobs, onJobFound, sourceName, sourceStartProgress, sourceWeight, queryIndex, maxQueries) {
     const highMatchJobs = [];
     const batchSize = 2; // Smaller batches for faster streaming
     
@@ -734,7 +744,7 @@ async function filterRealHighMatchJobsWithStreaming(jobs, analysis, openai, proc
                 console.log(`🔍 AI Processing: "${job.title}" from "${job.source}"`);
                 
                 // REAL AI analysis using OpenAI
-                const aiMatch = await calculateRealAIJobMatch(job, analysis, openai);
+                const aiMatch = await calculateRealAIJobMatch(job, analysis);
                 
                 // FIX: Apply source boost
                 let boostedMatchPercentage = aiMatch.matchPercentage;
@@ -807,8 +817,9 @@ async function filterRealHighMatchJobsWithStreaming(jobs, analysis, openai, proc
 }
 
 // REAL AI-powered job matching using OpenAI with source-aware prompting
-async function calculateRealAIJobMatch(job, analysis, openai) {
+async function calculateRealAIJobMatch(job, analysis) {
     // FIX: Adjust prompt to be more lenient and handle different API sources
+    const openai = getOpenAIClient();
     const response = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
         messages: [{

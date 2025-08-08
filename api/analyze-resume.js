@@ -1,12 +1,19 @@
 import OpenAI from "openai";
 import { analyzeResume } from "../tools.js";
 
-// Initialize OpenAI with enhanced configuration
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    timeout: 30000, // 30 second timeout for OpenAI requests
-    maxRetries: 2   // Retry failed requests up to 2 times
-});
+// Initialize OpenAI with enhanced configuration - lazy loading
+let openai = null;
+
+function getOpenAIClient() {
+    if (!openai) {
+        openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+            timeout: 30000, // 30 second timeout for OpenAI requests
+            maxRetries: 2   // Retry failed requests up to 2 times
+        });
+    }
+    return openai;
+}
 
 // Vercel serverless function handler
 export default async function handler(req, res) {
@@ -46,7 +53,7 @@ export default async function handler(req, res) {
             throw new Error('OpenAI API key is not configured');
         }
         
-        const analysis = await analyzeResume(resumeText, openai);
+        const analysis = await analyzeResume(resumeText, getOpenAIClient());
         console.log('Resume analysis completed successfully:', {
             technicalSkills: analysis.technicalSkills?.length || 0,
             workExperience: analysis.workExperience?.length || 0,
