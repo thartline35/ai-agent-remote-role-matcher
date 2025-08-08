@@ -1489,15 +1489,24 @@
   .job-details {
     transition: all var(--transition-normal);
     overflow: hidden;
+    max-height: 0;
+    opacity: 0;
   }
   
   .job-details.collapsed {
     max-height: 0;
     opacity: 0;
+    padding: 0;
+  }
+  
+  .job-card.expanded .job-details {
+    max-height: 2000px;
+    opacity: 1;
+    padding: var(--spacing-6);
   }
   
   .job-card.expanded .job-details.collapsed {
-    max-height: none;
+    max-height: 2000px;
     opacity: 1;
     padding: var(--spacing-6);
   }
