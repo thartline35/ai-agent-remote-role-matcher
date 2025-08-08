@@ -400,7 +400,10 @@ class AIJobMatcher {
             console.log('Analysis data:', this.resumeAnalysis);
             console.log('Filters:', filters);
             
-            // Start streaming request
+            // Start streaming request with timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
+            
             const response = await fetch('/api/search-jobs', {
                 method: 'POST',
                 headers: {
@@ -409,8 +412,11 @@ class AIJobMatcher {
                 body: JSON.stringify({
                     analysis: this.resumeAnalysis,
                     filters
-                })
+                }),
+                signal: controller.signal
             });
+            
+            clearTimeout(timeoutId);
             
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }));
@@ -421,8 +427,17 @@ class AIJobMatcher {
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
+            let lastActivity = Date.now();
     
             console.log('📖 Reading real-time job search stream...');
+    
+            // Keep-alive mechanism
+            const keepAliveInterval = setInterval(() => {
+                const timeSinceLastActivity = Date.now() - lastActivity;
+                if (timeSinceLastActivity > 30000) { // 30 seconds without activity
+                    console.log('⚠️ No activity for 30 seconds, checking connection...');
+                }
+            }, 10000); // Check every 10 seconds
     
             try {
                 while (true) {
@@ -431,6 +446,8 @@ class AIJobMatcher {
                         console.log('✅ Job search stream completed');
                         break;
                     }
+    
+                    lastActivity = Date.now();
     
                     // Handle streaming data
                     buffer += decoder.decode(value, { stream: true });
@@ -454,8 +471,25 @@ class AIJobMatcher {
                 }
             } catch (streamError) {
                 console.error('❌ Stream reading error:', streamError);
-                throw new Error('Failed to read job search results');
+                
+                // Check if we have any jobs already
+                if (this.jobResults.length > 0) {
+                    console.log(`✅ Found ${this.jobResults.length} jobs before connection error`);
+                    this.showLoading(false);
+                    this.displayJobResults();
+                    return;
+                }
+                
+                // Handle specific error types
+                if (streamError.name === 'AbortError') {
+                    throw new Error('Job search timed out. Please try again.');
+                } else if (streamError.message.includes('network') || streamError.message.includes('fetch')) {
+                    throw new Error('Network connection lost. Please check your internet connection and try again.');
+                } else {
+                    throw new Error('Failed to read job search results. Please try again.');
+                }
             } finally {
+                clearInterval(keepAliveInterval);
                 reader.releaseLock();
             }
     
@@ -468,6 +502,10 @@ class AIJobMatcher {
                 userMessage = error.message;
             } else if (error.message.includes('timeout')) {
                 userMessage = 'Job search timed out. Please try again.';
+            } else if (error.message.includes('Network connection lost')) {
+                userMessage = 'Network connection lost. Please check your internet connection and try again.';
+            } else if (error.message.includes('Failed to read job search results')) {
+                userMessage = 'Connection interrupted. Please try again.';
             }
     
             this.showError(userMessage);

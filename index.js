@@ -34,7 +34,7 @@ app.use((req, res, next) => {
     
     // Set different timeouts based on endpoint
     if (req.path === '/api/search-jobs') {
-        timeout = 180000; // 3 minutes for job search
+        timeout = 600000; // 10 minutes for job search (increased from 3 minutes)
     } else if (req.path === '/api/analyze-resume') {
         timeout = 60000; // 1 minute for resume analysis
     } else {
