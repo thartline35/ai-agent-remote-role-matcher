@@ -445,12 +445,12 @@ async function scrapeJobListingsWithStreaming(analysis, filters, onJobFound, onP
 
     // Source configuration with proper order
     const sources = [
-        { name: 'JSearch-RapidAPI', func: searchJSearchRapidAPI, weight: 20 },
-        { name: 'Adzuna', func: searchAdzunaJobs, weight: 20 },
-        { name: 'TheMuse', func: searchTheMuseJobs, weight: 20 },
-        { name: 'Reed', func: searchReedJobs, weight: 15 },
-        { name: 'RapidAPI-Jobs', func: searchRapidAPIJobs, weight: 15 },
-        { name: 'Theirstack', func: searchTheirstackJobs, weight: 10 }
+        { name: 'JSearch-RapidAPI', func: searchJSearchRapidAPIWithDetection, weight: 20 },
+        { name: 'Adzuna', func: searchAdzunaJobsWithDetection, weight: 20 },
+        { name: 'TheMuse', func: searchTheMuseJobsWithDetection, weight: 20 },
+        { name: 'Reed', func: searchReedJobsWithDetection, weight: 15 },
+        { name: 'RapidAPI-Jobs', func: searchRapidAPIJobsWithDetection, weight: 15 },
+        { name: 'Theirstack', func: searchTheirstackJobsWithDetection, weight: 10 }
     ];
 
     // Generate focused search queries - LOTS of them

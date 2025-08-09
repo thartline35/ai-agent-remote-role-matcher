@@ -1124,14 +1124,25 @@ async function searchJSearchRapidAPI(query, filters) {
             })
             .map(job => {
                 try {
-                    // FIXED: Enhanced salary handling for JSearch with safety checks
+                    // ENHANCED: Comprehensive salary handling with API estimation
                     let salary = 'Salary not specified';
+                    let salaryEstimate = null;
+                    
                     try {
+                        // First try direct salary data from job posting
                         if (job.job_min_salary || job.job_max_salary) {
                             salary = formatRapidAPISalary(job.job_min_salary, job.job_max_salary);
                         }
+                        
+                        // If no direct salary, try extracting from description
                         if (salary === 'Salary not specified' && job.job_description) {
                             salary = extractSalaryFromDescription(job.job_description);
+                        }
+                        
+                        // If still no salary, get API estimate (but don't block the job)
+                        if (salary === 'Salary not specified') {
+                            // Note: We'll fetch this asynchronously later to avoid blocking
+                            salaryEstimate = 'pending';
                         }
                     } catch (salaryError) {
                         console.warn('Salary parsing error for JSearch job:', salaryError.message);
@@ -1147,7 +1158,12 @@ async function searchJSearchRapidAPI(query, filters) {
                         description: job.job_description || '',
                         salary: salary,
                         type: job.job_employment_type || 'Full-time',
-                        datePosted: job.job_posted_at_datetime_utc || new Date().toISOString()
+                        datePosted: job.job_posted_at_datetime_utc || new Date().toISOString(),
+                        // ENHANCED: Add metadata for enhanced features
+                        jobId: job.job_id || null,
+                        salaryEstimate: salaryEstimate,
+                        companyLogoUrl: job.employer_logo_url || null,
+                        jobHighlights: job.job_highlights || null
                     };
                 } catch (mapError) {
                     console.warn('Error mapping JSearch job:', mapError.message);
@@ -1159,6 +1175,127 @@ async function searchJSearchRapidAPI(query, filters) {
     } catch (error) {
         console.error('❌ JSearch-RapidAPI error:', error.message);
         return [];
+    }
+}
+
+// ENHANCED: JSearch Salary Estimation
+async function getJSearchSalaryEstimate(jobTitle, location = 'ANY') {
+    const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
+    
+    if (!RAPIDAPI_KEY) {
+        return null;
+    }
+    
+    try {
+        console.log(`💰 Getting salary estimate for: ${jobTitle} in ${location}`);
+        
+        const response = await axios.get('https://jsearch.p.rapidapi.com/estimated-salary', {
+            params: {
+                job_title: jobTitle,
+                location: location,
+                location_type: 'ANY',
+                years_of_experience: 'ALL'
+            },
+            headers: {
+                'X-RapidAPI-Key': RAPIDAPI_KEY,
+                'X-RapidAPI-Host': 'jsearch.p.rapidapi.com'
+            },
+            timeout: 10000
+        });
+        
+        if (response.data?.data?.[0]) {
+            const salaryData = response.data.data[0];
+            return {
+                min: salaryData.min_salary,
+                max: salaryData.max_salary,
+                median: salaryData.median_salary,
+                currency: salaryData.salary_currency || 'USD',
+                period: salaryData.salary_period || 'YEAR'
+            };
+        }
+        
+        return null;
+    } catch (error) {
+        console.warn(`⚠️ Salary estimation failed for ${jobTitle}:`, error.message);
+        return null;
+    }
+}
+
+// ENHANCED: JSearch Job Details
+async function getJSearchJobDetails(jobId) {
+    const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
+    
+    if (!RAPIDAPI_KEY || !jobId) {
+        return null;
+    }
+    
+    try {
+        console.log(`🔍 Getting detailed info for job ID: ${jobId}`);
+        
+        const response = await axios.get('https://jsearch.p.rapidapi.com/job-details', {
+            params: {
+                job_id: jobId,
+                country: 'us'
+            },
+            headers: {
+                'X-RapidAPI-Key': RAPIDAPI_KEY,
+                'X-RapidAPI-Host': 'jsearch.p.rapidapi.com'
+            },
+            timeout: 10000
+        });
+        
+        if (response.data?.data?.[0]) {
+            return response.data.data[0];
+        }
+        
+        return null;
+    } catch (error) {
+        console.warn(`⚠️ Job details fetch failed for ${jobId}:`, error.message);
+        return null;
+    }
+}
+
+// ENHANCED: JSearch Company Salary Data
+async function getJSearchCompanySalary(company, jobTitle) {
+    const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
+    
+    if (!RAPIDAPI_KEY) {
+        return null;
+    }
+    
+    try {
+        console.log(`🏢 Getting salary data for: ${jobTitle} at ${company}`);
+        
+        const response = await axios.get('https://jsearch.p.rapidapi.com/company-job-salary', {
+            params: {
+                company: company,
+                job_title: jobTitle,
+                location_type: 'ANY',
+                years_of_experience: 'ALL'
+            },
+            headers: {
+                'X-RapidAPI-Key': RAPIDAPI_KEY,
+                'X-RapidAPI-Host': 'jsearch.p.rapidapi.com'
+            },
+            timeout: 10000
+        });
+        
+        if (response.data?.data?.[0]) {
+            const salaryData = response.data.data[0];
+            return {
+                min: salaryData.min_salary,
+                max: salaryData.max_salary,
+                median: salaryData.median_salary,
+                currency: salaryData.salary_currency || 'USD',
+                period: salaryData.salary_period || 'YEAR',
+                company: company
+            };
+        }
+        
+        return null;
+    } catch (error) {
+        console.warn(`⚠️ Company salary data failed for ${company}:`, error.message);
+        return null;
     }
 }
 
@@ -1752,3 +1889,34 @@ function extractSalaryNumbersFromStringFixed(salaryStr) {
     
     return { min, max };
 }
+
+// CRITICAL FIX: Export all the functions that are needed
+export {
+    // Core job search functions
+    searchAllJobs,
+    searchTheirstackJobs,
+    searchAdzunaJobs,
+    searchTheMuseJobs,
+    searchJSearchRapidAPI,
+    searchRapidAPIJobs,
+    searchReedJobs,
+    
+    // Enhanced RapidAPI functions
+    getJSearchSalaryEstimate,
+    getJSearchJobDetails,
+    getJSearchCompanySalary,
+    
+    // Job matching functions
+    calculateJobMatch,
+    calculateBasicJobMatch,
+    calculateEnhancedBasicMatchFixed,
+    calculateRealAIJobMatch,
+    
+    // Utility functions
+    isRemoteJob,
+    applyJobFilters,
+    extractSalaryFromDescription,
+    formatSalary,
+    formatRapidAPISalary,
+    parseRapidAPISalary
+};
