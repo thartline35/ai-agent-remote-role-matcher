@@ -849,6 +849,12 @@ CRITICAL INSTRUCTION FOR "missingRequirements":
 - Example: If job requires "Python" and candidate doesn't have Python → list "Python"
 - Example: If candidate has "Java" but job doesn't mention Java → DO NOT list "Java"
 
+CRITICAL: For "missingRequirements", list ONLY the skills/qualifications that the JOB LISTING from the APIREQUIRES but the CANDIDATE DOES NOT HAVE.
+CRITICAL: IF the job listing shows Master's degree as a requirement, but the resume uploaded does not show a Master's degree, then the missing requirement is "Master's degree".
+CRITICAL: If the job listing does not show (FOR EXAMPLE), AI/ML/Data Science, but the resume uploaded shows this as a skill, THIS DOES NOT GET INCLUDED IN THE MISSING REQUIREMENTS!
+CRITICAL: ONLY LIST MISSING QUALIFICATIONS THAT ARE NOT MENTIONED IN THE RESUME BUT ARE MENTIONED IN THE JOB LISTING PERIOD!
+CRITICAL: DO NOT CONSIDER JOB LISTING (NICE TO HAVE OR PREFERRED OR BONUS SKILLS/QUALIFICATIONS) AS A MISSING REQUIREMENT!
+
 Return ONLY JSON:
 {
   "matchPercentage": number (0-100, representing OVERALL comprehensive fit),
