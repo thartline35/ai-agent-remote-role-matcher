@@ -886,9 +886,9 @@ class AIJobMatcher {
                         <i class="fas fa-paper-plane"></i>
                         Apply Now
                     </button>
-                    <button class="save-btn ${this.savedJobs.find(savedJob => savedJob.id === job.id) ? 'saved' : ''}" onclick="window.aiJobMatcher.saveJob(${JSON.stringify(job).replace(/"/g, '&quot;')})">
+                    <button class="save-btn ${this.savedJobs.find(savedJob => savedJob.id === this.generateJobId(job)) ? 'saved' : ''}" onclick="window.aiJobMatcher.saveJob(${JSON.stringify(job).replace(/"/g, '&quot;')})">
                         <i class="fas fa-bookmark"></i>
-                        ${this.savedJobs.find(savedJob => savedJob.id === job.id) ? 'Saved!' : 'Save Job'}
+                        ${this.savedJobs.find(savedJob => savedJob.id === this.generateJobId(job)) ? 'Saved!' : 'Save Job'}
                     </button>
                 </div>
             </div>
@@ -1237,15 +1237,27 @@ class AIJobMatcher {
         this.progressFill.style.width = `${Math.min(percentage, 100)}%`;
     }
 
+    generateJobId(job) {
+        // Create a unique ID based on title, company, and source
+        const cleanTitle = (job.title || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        const cleanCompany = (job.company || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        const cleanSource = (job.source || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        return `${cleanTitle}-${cleanCompany}-${cleanSource}`;
+    }
+
     saveJob(job) {
-        const existingJob = this.savedJobs.find(savedJob => savedJob.id === job.id);
+        // Create a unique ID based on title and company
+        const jobId = this.generateJobId(job);
+        const existingJob = this.savedJobs.find(savedJob => savedJob.id === jobId);
+        
         if (existingJob) {
-            this.removeSavedJob(job.id);
+            this.removeSavedJob(jobId);
             return;
         }
 
         const newJob = {
             ...job,
+            id: jobId,
             savedAt: new Date().toISOString()
         };
         this.savedJobs.push(newJob);
@@ -1273,11 +1285,17 @@ class AIJobMatcher {
             if (jobCard) {
                 const jobTitle = jobCard.querySelector('.job-title')?.textContent;
                 const jobCompany = jobCard.querySelector('.job-company')?.textContent;
+                const jobSource = jobCard.querySelector('.job-source')?.textContent?.replace('Source: ', '') || '';
+                
+                // Create job ID to match
+                const jobId = this.generateJobId({
+                    title: jobTitle,
+                    company: jobCompany,
+                    source: jobSource
+                });
                 
                 // Find the job in saved jobs
-                const savedJob = this.savedJobs.find(job => 
-                    job.title === jobTitle && job.company === jobCompany
-                );
+                const savedJob = this.savedJobs.find(job => job.id === jobId);
                 
                 if (savedJob) {
                     button.classList.add('saved');
