@@ -567,16 +567,16 @@ class AIJobMatcher {
     async handleJobsFound(data) {
         console.log(`🎯 RECEIVED: ${data.jobs.length} jobs from ${data.source}`);
         
-        // FIXED: Add to temporary results during search - don't update UI totals yet
+        // FIXED: Add to temporary results and track our own accurate total
         this.tempJobResults.push(...data.jobs);
+        const accurateTotal = this.tempJobResults.length;
         
-        console.log(`📊 Total jobs collected so far: ${this.tempJobResults.length}`);
+        console.log(`📊 Accurate cumulative total: ${accurateTotal} (${data.jobs.length} new from ${data.source})`);
 
         // Show results section if first jobs
         if (this.resultsSection.style.display === 'none') {
             this.resultsSection.style.display = 'block';
             this.resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            console.log('📺 Results section now visible');
         }
 
         // Display jobs immediately with animation
@@ -585,7 +585,6 @@ class AIJobMatcher {
                 const jobCard = this.createEnhancedJobCard(job);
                 this.jobsGrid.appendChild(jobCard);
                 
-                // Smooth animation
                 jobCard.style.opacity = '0';
                 jobCard.style.transform = 'translateY(20px)';
                 
@@ -597,21 +596,30 @@ class AIJobMatcher {
                 
                 this.displayedJobsCount++;
                 
-                // FIXED: Only update displayed count, not final totals during search
-                this.updateIntermediateStats(data.source);
-                
-            }, index * 100); // Stagger animations
+            }, index * 100);
         });
 
-        // Update loading message with intermediate count
-        this.loadingMessage.textContent = `Found ${this.tempJobResults.length} jobs so far from ${data.source}...`;
+        // FIXED: Clear, accurate messages using our own count
+        if (data.jobs.length > 0) {
+            this.loadingMessage.textContent = `Found ${accurateTotal} jobs total - ${data.jobs.length} new from ${data.source}`;
+        } else {
+            this.loadingMessage.textContent = `Found ${accurateTotal} jobs total - no new jobs from ${data.source}`;
+        }
         
-        // Update progress based on source completion
+        // FIXED: Use our accurate count, not the backend's potentially wrong count
+        if (this.totalJobsElement) {
+            this.totalJobsElement.textContent = `${accurateTotal} (searching...)`;
+        }
+        
+        if (this.matchPercentage) {
+            this.matchPercentage.textContent = 'Calculating...';
+        }
+        
         if (data.sourceProgress) {
             this.updateProgressBar(Math.min(data.sourceProgress, 90));
         }
 
-        console.log(`✅ Displayed ${data.jobs.length} jobs from ${data.source}, total displayed: ${this.displayedJobsCount}`);
+        console.log(`✅ STREAMED: ${data.jobs.length} jobs from ${data.source}, ACCURATE TOTAL: ${accurateTotal}`);
     }
 
     // FIXED: New function for intermediate stats updates during search
