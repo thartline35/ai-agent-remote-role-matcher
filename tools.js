@@ -1890,8 +1890,8 @@ function extractSalaryNumbersFromStringFixed(salaryStr) {
     return { min, max };
 }
 
-// CRITICAL FIX: Export all the functions that are needed
-export {
+// CRITICAL FIX: Export all the functions that are needed  
+export {    
     // Core job search functions
     searchAllJobs,
     searchTheirstackJobs,
