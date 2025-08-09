@@ -637,11 +637,12 @@ class AIJobMatcher {
     async handleSearchComplete(data) {
         console.log('🏁 Search completed:', data);
 
-        // FIXED: Now set the FINAL totals from the complete search results
+        // FIXED: Use ONLY frontend-tracked jobs, ignore backend totalJobs
         this.jobResults = [...this.tempJobResults]; // Copy all collected jobs
-        this.totalJobs = this.jobResults.length;
+        this.totalJobs = this.jobResults.length; // Use frontend count, not data.totalJobs
         
-        console.log(`🎉 FINAL RESULTS: ${this.totalJobs} total jobs found!`);
+        console.log(`🎉 FINAL RESULTS: ${this.totalJobs} total jobs found (frontend count)!`);
+        console.log(`📊 Backend reported: ${data.totalJobs || 'unknown'} jobs (ignored)`);
         
         // FIXED: Calculate final stats based on ALL jobs from ALL sources
         this.updateFinalStats();

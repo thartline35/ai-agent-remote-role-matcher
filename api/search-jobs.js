@@ -336,12 +336,11 @@ export default async function handler(req, res) {
                     totalJobsFound += jobs.length;
                     allJobs.push(...jobs);
 
-                    // Send jobs immediately
+                    // Send jobs immediately - FIXED: Don't send totalFound to avoid frontend confusion
                     const updateData = {
                         type: 'jobs_found',
                         jobs: jobs,
                         source: sourceName,
-                        totalFound: totalJobsFound,
                         sourceProgress: sourceProgress,
                         timestamp: new Date().toISOString()
                     };
@@ -837,16 +836,18 @@ CANDIDATE PROFILE:
 - Responsibilities: ${analysis.responsibilities?.slice(0, 8).join(', ') || 'None'}
 - Qualifications: ${analysis.qualifications?.slice(0, 5).join(', ') || 'None'}
 - Education: ${analysis.education?.slice(0, 5).join(', ') || 'None'}
-- Seniority Level: ${analysis.seniorityLevel || 'Unknown'}
+- Seniority Level: ${analysis.seniorityLevel || 'None'}
 
 IMPORTANT: We are aiming for 70%+ matches. If there is ANY reasonable relevance, aim for at least 70% match.
 
 CRITICAL INSTRUCTION FOR "missingRequirements": 
-- Analyze what the JOB DESCRIPTION specifically requires or mentions as necessary skills/qualifications
-- Compare those job requirements against the candidate's profile
-- List ONLY the requirements that the job asks for but the candidate does NOT possess
-- DO NOT list candidate skills that simply aren't mentioned in the job posting
-- Focus on actual gaps between job needs and candidate capabilities
+- Step 1: FIRST identify what specific skills/qualifications the JOB POSTING explicitly requires or asks for
+- Step 2: THEN check if the CANDIDATE has those job-required skills in their profile
+- Step 3: List ONLY job requirements that the candidate is missing (job asks for X, but candidate doesn't have X)
+- WRONG APPROACH: Do NOT list candidate skills that aren't mentioned in the job (candidate has Y, but job doesn't mention Y)
+- CORRECT APPROACH: Only list what the job needs that the candidate lacks
+- Example: If job requires "Python" and candidate doesn't have Python → list "Python"
+- Example: If candidate has "Java" but job doesn't mention Java → DO NOT list "Java"
 
 Return ONLY JSON:
 {
@@ -854,7 +855,7 @@ Return ONLY JSON:
   "matchedTechnicalSkills": ["candidate technical skills that match job requirements"],
   "matchedSoftSkills": ["candidate soft skills that align with job needs"],
   "matchedExperience": ["candidate experience that matches job requirements"],
-  "missingRequirements": ["specific job requirements that candidate lacks - NOT candidate skills absent from job"],
+  "missingRequirements": ["ONLY job-required skills/qualifications that candidate does NOT have - NOT candidate skills missing from job description"],
   "reasoning": "explain the OVERALL comprehensive match assessment",
   "industryMatch": number (0-100),
   "seniorityMatch": number (0-100),

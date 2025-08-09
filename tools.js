@@ -84,7 +84,7 @@ Return ONLY a valid JSON object:
                 industries: analysis.industries?.length || 0,
                 responsibilities: analysis.responsibilities?.length || 0,
                 achievements: analysis.achievements?.length || 0,
-                seniorityLevel: analysis.seniorityLevel || 'unknown'
+                seniorityLevel: analysis.seniorityLevel || 'none'
             });
             
             // Merge with enhanced fallback extraction
@@ -98,7 +98,7 @@ Return ONLY a valid JSON object:
                 industries: [...new Set([...(analysis.industries || []), ...(fallbackAnalysis.industries || [])])],
                 responsibilities: [...new Set([...(analysis.responsibilities || []), ...(fallbackAnalysis.responsibilities || [])])],
                 achievements: [...new Set([...(analysis.achievements || []), ...(fallbackAnalysis.achievements || [])])],
-                seniorityLevel: analysis.seniorityLevel || fallbackAnalysis.seniorityLevel || 'mid'
+                seniorityLevel: (analysis.seniorityLevel && analysis.seniorityLevel.trim()) || fallbackAnalysis.seniorityLevel || 'mid'
             };
 
         return mergedAnalysis;
@@ -342,7 +342,7 @@ export async function scrapeJobListings(analysis, filters, openai, onJobFound) {
     }) || []);
     console.log('- Industries:', analysis.industries?.slice(0, 3) || []);
     console.log('- Responsibilities:', analysis.responsibilities?.slice(0, 5) || []);
-    console.log('- Seniority Level:', analysis.seniorityLevel || 'unknown');
+    console.log('- Seniority Level:', analysis.seniorityLevel || 'none');
 
     try {
         // Generate enhanced search queries
@@ -1350,7 +1350,7 @@ CANDIDATE PROFILE:
 - Responsibilities: ${analysis.responsibilities?.slice(0, 8).join(', ') || 'None'}
 - Qualifications: ${analysis.qualifications?.slice(0, 5).join(', ') || 'None'}
 - Education: ${analysis.education?.slice(0, 5).join(', ') || 'None'}
-- Seniority Level: ${analysis.seniorityLevel || 'Unknown'}
+- Seniority Level: ${analysis.seniorityLevel || 'None'}
 
 IMPORTANT: We are aiming for 70%+ matches. If there is ANY reasonable relevance, aim for at least 70% match.
 
