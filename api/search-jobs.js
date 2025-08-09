@@ -820,12 +820,36 @@ async function calculateRealAIJobMatch(job, analysis) {
     const openai = getOpenAIClient();
     const response = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
-        messages: [{
-            role: "user",
-            content: `Analyze this REAL job for COMPREHENSIVE OVERALL MATCH against the candidate's profile.
-This job is from ${job.source} API. Be GENEROUS with matching scores! We aim to find at least 10-20 jobs from each API source with 70%+ match scores.
+        messages: [
+            {
+                role: "system",
+                content: `You are a job matching expert. Your PRIMARY RESPONSIBILITY is to correctly identify missing requirements.
 
-REAL JOB: ${job.title} at ${job.company}
+CRITICAL RULE FOR MISSING REQUIREMENTS:
+- Only list things the JOB REQUIRES that the CANDIDATE DOES NOT HAVE
+- Do NOT list candidate skills that aren't mentioned in the job
+- Do NOT list "nice to have" or "preferred" requirements
+- If no requirements are missing, return ["None"] and set matchPercentage to 100
+
+SCORING LOGIC:
+- If missingRequirements = ["None"] → matchPercentage should be 100
+- If candidate meets all job requirements → perfect match = 100%
+- Be generous with scores (aim for 70%+ minimum) but reward complete matches with 100%
+
+EXAMPLES:
+✅ CORRECT: Job requires "Python", candidate has no Python → missing: ["Python"], score: 70-85%
+✅ CORRECT: Job requires "Master's degree", candidate has Bachelor's → missing: ["Master's degree"], score: 75-90%
+✅ CORRECT: Candidate meets ALL job requirements → missing: ["None"], score: 100%
+❌ WRONG: Job doesn't mention "Java", candidate has Java → DO NOT include Java as missing
+❌ WRONG: Job says "PhD preferred", candidate has Master's → DO NOT include PhD as missing
+
+You must be generous with match scores (aim for 70%+) but strict about only listing actual missing requirements.`
+            },
+            {
+                role: "user",
+                content: `Analyze this job match:
+
+JOB: ${job.title} at ${job.company}
 Location: ${job.location}
 Description: ${job.description ? job.description.substring(0, 800) : 'No description available'}
 
@@ -838,37 +862,20 @@ CANDIDATE PROFILE:
 - Education: ${analysis.education?.slice(0, 5).join(', ') || 'None'}
 - Seniority Level: ${analysis.seniorityLevel || 'None'}
 
-IMPORTANT: We are aiming for 70%+ matches. If there is ANY reasonable relevance, aim for at least 70% match.
-
-CRITICAL INSTRUCTION FOR "missingRequirements": 
-- Step 1: FIRST identify what specific skills/qualifications the JOB POSTING explicitly requires or asks for
-- Step 2: THEN check if the CANDIDATE has those job-required skills in the resume uploaded
-- Step 3: List ONLY job requirements that the candidate is missing (job asks for X, but candidate doesn't have X)
-- WRONG APPROACH: Do NOT list candidate skills from their resume that aren't mentioned in the job (candidate has Y, but job doesn't mention Y)
-- CORRECT APPROACH: Only list what the job needs that the candidate lacks from their resume uploaded
-- Example: If job requires "Python" and candidate doesn't have Python → list "Python"
-- Example: If candidate has "Java" but job doesn't mention Java → DO NOT list "Java"
-- REQUIRED: IF THERE ARE NO MISSING REQUIREMENTS, THEN LIST "NONE" AND THE JOB IS MATCHED 100%!!!!
-
-CRITICAL: For "missingRequirements", list ONLY the skills/qualifications that the JOB LISTING from the APIREQUIRES but the CANDIDATE DOES NOT HAVE.
-CRITICAL: IF the job listing shows Master's degree as a requirement, but the resume uploaded does not show a Master's degree, then the missing requirement is "Master's degree".
-CRITICAL: If the job listing does not show (FOR EXAMPLE), AI/ML/Data Science, but the resume uploaded shows this as a skill, THIS DOES NOT GET INCLUDED IN THE MISSING REQUIREMENTS!
-CRITICAL: ONLY LIST MISSING QUALIFICATIONS THAT ARE NOT MENTIONED IN THE RESUME BUT ARE MENTIONED IN THE JOB LISTING PERIOD!
-CRITICAL: DO NOT CONSIDER JOB LISTING (NICE TO HAVE OR PREFERRED OR BONUS SKILLS/QUALIFICATIONS) AS A MISSING REQUIREMENT!
-
 Return ONLY JSON:
 {
   "matchPercentage": number (0-100, representing OVERALL comprehensive fit),
-  "matchedTechnicalSkills": ["candidate technical skills that match job requirements"],
-  "matchedSoftSkills": ["candidate soft skills that align with job needs"],
-  "matchedExperience": ["candidate experience that matches job requirements"],
-  "missingRequirements": ["ONLY job-required skills/qualifications that candidate does NOT have - NOT candidate skills missing from job description"],
+  "matchedTechnicalSkills": ["candidate skills that match job requirements"],
+  "matchedSoftSkills": ["candidate soft skills that match job needs"],
+  "matchedExperience": ["candidate experience that aligns with job"],
+  "missingRequirements": ["ONLY job requirements the candidate lacks - follow the system instructions"],
   "reasoning": "explain the OVERALL comprehensive match assessment",
   "industryMatch": number (0-100),
   "seniorityMatch": number (0-100),
   "growthPotential": "low|medium|high"
 }`
-        }],
+            }
+        ],
         temperature: 0.1,
         max_tokens: 500
     });
