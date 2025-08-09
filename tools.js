@@ -1333,7 +1333,7 @@ async function calculateEnhancedJobMatches(jobs, analysis, openai) {
 async function calculateRealAIJobMatch(job, analysis) {
     const openai = getOpenAIClient();
     const response = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: "gpt-4",
         messages: [
             {
                 role: "system",
@@ -1361,9 +1361,9 @@ You must be generous with match scores (aim for 70%+) but strict about only list
             },
             {
                 role: "user",
-                content: `Analyze this job match:
+                content: `I need you to analyze how well this candidate matches this job posting.
 
-JOB: ${job.title} at ${job.company}
+JOB POSTING: ${job.title} at ${job.company}
 Location: ${job.location}
 Description: ${job.description ? job.description.substring(0, 800) : 'No description available'}
 
@@ -1376,13 +1376,19 @@ CANDIDATE PROFILE:
 - Education: ${analysis.education?.slice(0, 5).join(', ') || 'None'}
 - Seniority Level: ${analysis.seniorityLevel || 'None'}
 
-Return ONLY JSON:
+Please analyze this match following these steps:
+1. First, identify what the job posting REQUIRES (ignore "nice to have" or "preferred")
+2. Then, check if the candidate has each of those requirements
+3. For missingRequirements: ONLY list job requirements the candidate lacks. Do NOT list candidate skills that aren't mentioned in the job.
+4. If the candidate has ALL job requirements, set missingRequirements to ["None"] and matchPercentage to 100
+
+Return your analysis as JSON:
 {
   "matchPercentage": number (0-100, representing OVERALL comprehensive fit),
   "matchedTechnicalSkills": ["candidate skills that match job requirements"],
   "matchedSoftSkills": ["candidate soft skills that match job needs"],
   "matchedExperience": ["candidate experience that aligns with job"],
-  "missingRequirements": ["ONLY job requirements the candidate lacks - follow the system instructions"],
+  "missingRequirements": ["None" if candidate has all requirements, otherwise list only what job requires that candidate lacks],
   "reasoning": "explain the OVERALL comprehensive match assessment",
   "industryMatch": number (0-100),
   "seniorityMatch": number (0-100),
@@ -1391,7 +1397,7 @@ Return ONLY JSON:
             }
         ],
         temperature: 0.1,
-        max_tokens: 500
+        max_tokens: 600
     });
 
     const content = response.choices[0].message.content.trim();
