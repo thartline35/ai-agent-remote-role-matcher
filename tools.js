@@ -1332,8 +1332,10 @@ async function calculateEnhancedJobMatches(jobs, analysis, openai) {
 // FIXED: AI-powered job matching with corrected Missing Requirements logic
 async function calculateRealAIJobMatch(job, analysis) {
     const openai = getOpenAIClient();
-    const response = await openai.chat.completions.create({
-        model: "gpt-4",
+    
+    try {
+        const response = await openai.chat.completions.create({
+        model: "gpt-4o",
         messages: [
             {
                 role: "system",
@@ -1418,6 +1420,18 @@ Return your analysis as JSON:
         };
     } else {
         throw new Error('No valid JSON found in AI response');
+    }
+    
+    } catch (openaiError) {
+        console.error(`🤖 OpenAI API Error for "${job.title}":`, {
+            error: openaiError.message,
+            type: openaiError.type || 'unknown',
+            code: openaiError.code || 'unknown',
+            status: openaiError.status || 'unknown'
+        });
+        
+        // Re-throw the error to be handled by the calling function
+        throw new Error(`OpenAI API failed: ${openaiError.message}`);
     }
 }
 

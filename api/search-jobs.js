@@ -769,7 +769,12 @@ async function filterRealHighMatchJobsWithStreaming(jobs, analysis, processedJob
                 
                 return null;
             } catch (error) {
-                console.error(`AI match analysis failed for "${job.title}":`, error.message);
+                console.error(`❌ AI match analysis failed for "${job.title}":`, {
+                    error: error.message,
+                    stack: error.stack?.substring(0, 200),
+                    jobTitle: job.title,
+                    jobSource: job.source
+                });
                 
                 // FIX: Fall back to basic matching with boost on error
                 const basicMatch = calculateEnhancedBasicMatchFixed(job, analysis);
@@ -785,7 +790,7 @@ async function filterRealHighMatchJobsWithStreaming(jobs, analysis, processedJob
                         matchedSoftSkills: [],
                         matchedExperience: [],
                         missingRequirements: [],
-                        reasoning: `Basic match with ${sourceBoost}% boost due to AI analysis failure`,
+                        reasoning: `Basic match with ${sourceBoost}% boost due to AI analysis failure: ${error.message}`,
                         industryMatch: Math.min(boostedBasicMatch, 90),
                         seniorityMatch: Math.min(boostedBasicMatch - 5, 85),
                         growthPotential: boostedBasicMatch >= 80 ? 'high' : 'medium'
@@ -818,8 +823,10 @@ async function filterRealHighMatchJobsWithStreaming(jobs, analysis, processedJob
 // REAL AI-powered job matching using OpenAI with CORRECTED missing requirements logic
 async function calculateRealAIJobMatch(job, analysis) {
     const openai = getOpenAIClient();
-    const response = await openai.chat.completions.create({
-        model: "gpt-4",
+    
+    try {
+        const response = await openai.chat.completions.create({
+        model: "gpt-4o",
         messages: [
             {
                 role: "system",
@@ -904,6 +911,18 @@ Return your analysis as JSON:
         };
     } else {
         throw new Error('No valid JSON found in AI response');
+    }
+    
+    } catch (openaiError) {
+        console.error(`🤖 OpenAI API Error for "${job.title}":`, {
+            error: openaiError.message,
+            type: openaiError.type || 'unknown',
+            code: openaiError.code || 'unknown',
+            status: openaiError.status || 'unknown'
+        });
+        
+        // Re-throw the error to be handled by the calling function
+        throw new Error(`OpenAI API failed: ${openaiError.message}`);
     }
 }
 
