@@ -1,7 +1,23 @@
+// tools.js
 import dotenv from 'dotenv';
 import axios from 'axios';
+import OpenAI from "openai";
 
 dotenv.config({ path: './local.env' });
+
+// Initialize OpenAI with enhanced configuration - lazy loading
+let openai = null;
+
+function getOpenAIClient() {
+    if (!openai) {
+        openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+            timeout: 30000, // 30 second timeout for OpenAI requests
+            maxRetries: 2   // Retry failed requests up to 2 times
+        });
+    }
+    return openai;
+}
 
 // Enhanced Resume Analysis Function with better role extraction
 export async function analyzeResume(resumeText, openai) {
@@ -515,7 +531,7 @@ async function filterHighMatchJobsFixed(jobs, analysis, openai, processedJobs) {
                 // Return 70% or higher matches
                 if (basicMatch >= 70) {
                     try {
-                        const enhancedMatch = await calculateSingleEnhancedJobMatch(job, analysis, openai);
+                        const enhancedMatch = await calculateRealAIJobMatch(job, analysis);
                         const finalJob = { ...job, ...enhancedMatch };
                         
                         // Return only 70% or higher matches
@@ -1286,7 +1302,7 @@ async function calculateEnhancedJobMatches(jobs, analysis, openai) {
                 // Add delay based on index to stagger requests
                 await new Promise(resolve => setTimeout(resolve, index * 200));
                 
-                const matchData = await calculateSingleEnhancedJobMatch(job, analysis, openai);
+                const matchData = await calculateRealAIJobMatch(job, analysis);
                 return { ...job, ...matchData };
                 
             } catch (error) {
@@ -1313,32 +1329,41 @@ async function calculateEnhancedJobMatches(jobs, analysis, openai) {
     return matchedJobs;
 }
 
-// Enhanced single job match calculation
-async function calculateSingleEnhancedJobMatch(job, analysis, openai) {
+// FIXED: AI-powered job matching with corrected Missing Requirements logic
+async function calculateRealAIJobMatch(job, analysis) {
+    const openai = getOpenAIClient();
     const response = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
         messages: [{
             role: "user",
-            content: `Analyze this job match comprehensively. Consider not just exact skill matches, but role compatibility, industry fit, and growth potential.
+            content: `Analyze this REAL job for COMPREHENSIVE OVERALL MATCH against the candidate's profile.
+This job is from ${job.source} API. Be GENEROUS with matching scores! We aim to find at least 10-20 jobs from each API source with 70%+ match scores.
 
-Job: ${job.title} at ${job.company}
-Description: ${job.description.substring(0, 800)}
+REAL JOB: ${job.title} at ${job.company}
+Location: ${job.location}
+Description: ${job.description ? job.description.substring(0, 800) : 'No description available'}
 
-Candidate Profile:
+CANDIDATE PROFILE:
 - Technical Skills: ${analysis.technicalSkills?.slice(0, 15).join(', ') || 'None'}
 - Work Experience: ${analysis.workExperience?.slice(0, 8).join(', ') || 'None'}
 - Industries: ${analysis.industries?.slice(0, 5).join(', ') || 'None'}
 - Responsibilities: ${analysis.responsibilities?.slice(0, 8).join(', ') || 'None'}
+- Qualifications: ${analysis.qualifications?.slice(0, 5).join(', ') || 'None'}
+- Education: ${analysis.education?.slice(0, 5).join(', ') || 'None'}
 - Seniority Level: ${analysis.seniorityLevel || 'Unknown'}
+
+IMPORTANT: We are aiming for 70%+ matches. If there is ANY reasonable relevance, aim for at least 70% match.
+
+CRITICAL: For "missingRequirements", list ONLY the skills/qualifications that the JOB REQUIRES but the CANDIDATE DOES NOT HAVE. Do NOT list candidate skills that aren't mentioned in the job.
 
 Return ONLY JSON:
 {
-  "matchPercentage": number (0-100),
-  "matchedTechnicalSkills": ["skill1", "skill2"],
-  "matchedSoftSkills": ["skill1", "skill2"],
-  "matchedExperience": ["exp1", "exp2"],
-  "missingRequirements": ["req1", "req2"],
-  "reasoning": "brief explanation focusing on why this is/isn't a good match",
+  "matchPercentage": number (0-100, representing OVERALL comprehensive fit),
+  "matchedTechnicalSkills": ["candidate skills that match job requirements"],
+  "matchedSoftSkills": ["candidate soft skills that match job needs"],
+  "matchedExperience": ["candidate experience that aligns with job"],
+  "missingRequirements": ["job requirements the candidate lacks - NOT candidate skills absent from job"],
+  "reasoning": "explain the OVERALL comprehensive match assessment",
   "industryMatch": number (0-100),
   "seniorityMatch": number (0-100),
   "growthPotential": "low|medium|high"
@@ -1359,7 +1384,7 @@ Return ONLY JSON:
             matchedSoftSkills: parsed.matchedSoftSkills || [],
             matchedExperience: parsed.matchedExperience || [],
             missingRequirements: parsed.missingRequirements || [],
-            reasoning: parsed.reasoning || 'No reasoning provided',
+            reasoning: parsed.reasoning || 'Comprehensive AI analysis completed',
             industryMatch: parsed.industryMatch || 0,
             seniorityMatch: parsed.seniorityMatch || 0,
             growthPotential: parsed.growthPotential || 'medium'

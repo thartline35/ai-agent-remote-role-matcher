@@ -1,4 +1,4 @@
-// /api/search-jobs.js - DEBUG VERSION with Enhanced Logging for the 4 Failing APIs
+// /api/search-jobs.js
 import OpenAI from 'openai';
 import axios from 'axios';
 import dotenv from 'dotenv';
@@ -816,9 +816,8 @@ async function filterRealHighMatchJobsWithStreaming(jobs, analysis, processedJob
     return highMatchJobs;
 }
 
-// REAL AI-powered job matching using OpenAI with source-aware prompting
+// REAL AI-powered job matching using OpenAI with CORRECTED missing requirements logic
 async function calculateRealAIJobMatch(job, analysis) {
-    // FIX: Adjust prompt to be more lenient and handle different API sources
     const openai = getOpenAIClient();
     const response = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
@@ -842,13 +841,20 @@ CANDIDATE PROFILE:
 
 IMPORTANT: We are aiming for 70%+ matches. If there is ANY reasonable relevance, aim for at least 70% match.
 
+CRITICAL INSTRUCTION FOR "missingRequirements": 
+- Analyze what the JOB DESCRIPTION specifically requires or mentions as necessary skills/qualifications
+- Compare those job requirements against the candidate's profile
+- List ONLY the requirements that the job asks for but the candidate does NOT possess
+- DO NOT list candidate skills that simply aren't mentioned in the job posting
+- Focus on actual gaps between job needs and candidate capabilities
+
 Return ONLY JSON:
 {
   "matchPercentage": number (0-100, representing OVERALL comprehensive fit),
-  "matchedTechnicalSkills": ["skill1", "skill2"],
-  "matchedSoftSkills": ["skill1", "skill2"],
-  "matchedExperience": ["exp1", "exp2"],
-  "missingRequirements": ["req1", "req2"],
+  "matchedTechnicalSkills": ["candidate technical skills that match job requirements"],
+  "matchedSoftSkills": ["candidate soft skills that align with job needs"],
+  "matchedExperience": ["candidate experience that matches job requirements"],
+  "missingRequirements": ["specific job requirements that candidate lacks - NOT candidate skills absent from job"],
   "reasoning": "explain the OVERALL comprehensive match assessment",
   "industryMatch": number (0-100),
   "seniorityMatch": number (0-100),

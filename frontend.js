@@ -1,4 +1,4 @@
-// Enhanced Frontend.js for AI Job Matcher with REAL-TIME streaming
+// Frontend.js
 class AIJobMatcher {
     constructor() {
         this.initializeElements();
@@ -24,6 +24,10 @@ class AIJobMatcher {
         this.totalSources = 6;
         this.savedJobs = this.loadSavedJobs();
         this.updateSavedCount();
+        
+        // FIXED: Add tracking for intermediate results without updating UI
+        this.tempJobResults = [];
+        this.searchInProgress = false;
     }
 
     initializeElements() {
@@ -384,17 +388,19 @@ class AIJobMatcher {
 
     async startJobSearch() {
         try {
-            this.showLoading(true, 'Initializing job search...');
-            this.hideError();
-    
-            // Reset state for new search
+            // FIXED: Reset all counters and temporary storage
+            this.searchInProgress = true;
             this.jobResults = [];
+            this.tempJobResults = [];
             this.totalJobs = 0;
             this.displayedJobsCount = 0;
             this.searchProgress = 0;
             this.sourcesCompleted = 0;
             this.jobsGrid.innerHTML = '';
             this.resultsSection.style.display = 'none';
+
+            this.showLoading(true, 'Initializing job search...');
+            this.hideError();
     
             const filters = this.getSearchFilters();
     
@@ -513,6 +519,10 @@ class AIJobMatcher {
             this.showError(userMessage);
             this.showLoading(false);
             this.addRetryButton();
+            
+            // ... existing error handling ...
+            this.searchInProgress = false;
+            this.tempJobResults = [];
         }
     }
 
@@ -556,14 +566,11 @@ class AIJobMatcher {
 
     async handleJobsFound(data) {
         console.log(`🎯 RECEIVED: ${data.jobs.length} jobs from ${data.source}`);
-        console.log(`📊 Current jobResults length before adding: ${this.jobResults.length}`);
-
-        // Add jobs to results - CRITICAL LINE
-        this.jobResults.push(...data.jobs);
-        this.totalJobs = data.totalFound || this.jobResults.length;
-
-        console.log(`📊 jobResults length after adding: ${this.jobResults.length}`);
-        console.log(`📊 Total jobs reported: ${this.totalJobs}`);
+        
+        // FIXED: Add to temporary results during search - don't update UI totals yet
+        this.tempJobResults.push(...data.jobs);
+        
+        console.log(`📊 Total jobs collected so far: ${this.tempJobResults.length}`);
 
         // Show results section if first jobs
         if (this.resultsSection.style.display === 'none') {
@@ -589,13 +596,15 @@ class AIJobMatcher {
                 });
                 
                 this.displayedJobsCount++;
-                this.updateJobStats();
+                
+                // FIXED: Only update displayed count, not final totals during search
+                this.updateIntermediateStats(data.source);
                 
             }, index * 100); // Stagger animations
         });
 
-        // Update loading message
-        this.loadingMessage.textContent = `Found ${this.totalJobs} jobs so far from ${data.source}...`;
+        // Update loading message with intermediate count
+        this.loadingMessage.textContent = `Found ${this.tempJobResults.length} jobs so far from ${data.source}...`;
         
         // Update progress based on source completion
         if (data.sourceProgress) {
@@ -605,13 +614,29 @@ class AIJobMatcher {
         console.log(`✅ Displayed ${data.jobs.length} jobs from ${data.source}, total displayed: ${this.displayedJobsCount}`);
     }
 
+    // FIXED: New function for intermediate stats updates during search
+    updateIntermediateStats(sourceName) {
+        // Only update displayed count during search, not final calculations
+        if (this.totalJobsElement) {
+            this.totalJobsElement.textContent = `${this.displayedJobsCount} (searching...)`;
+        }
+        
+        if (this.matchPercentage) {
+            this.matchPercentage.textContent = 'Calculating...';
+        }
+    }
+
     async handleSearchComplete(data) {
         console.log('🏁 Search completed:', data);
 
-        this.totalJobs = data.totalJobs || this.jobResults.length;
+        // FIXED: Now set the FINAL totals from the complete search results
+        this.jobResults = [...this.tempJobResults]; // Copy all collected jobs
+        this.totalJobs = this.jobResults.length;
         
-        // Update final stats
-        this.updateJobStats();
+        console.log(`🎉 FINAL RESULTS: ${this.totalJobs} total jobs found!`);
+        
+        // FIXED: Calculate final stats based on ALL jobs from ALL sources
+        this.updateFinalStats();
         
         // Sort jobs by match percentage for better display
         this.sortJobsByMatch();
@@ -619,19 +644,23 @@ class AIJobMatcher {
         this.showLoading(false);
         this.updateProgressBar(100);
         
-        console.log(`🎉 COMPLETED: ${this.totalJobs} total jobs found!`);
+        // Clear temporary results
+        this.tempJobResults = [];
+        this.searchInProgress = false;
     }
 
-    updateJobStats() {
-        console.log(`📊 Updating job stats - Total: ${this.totalJobs}, Displayed: ${this.displayedJobsCount}`);
+    // FIXED: New function for final statistics calculation
+    updateFinalStats() {
+        console.log(`📊 Calculating final stats for ${this.totalJobs} jobs`);
         
+        // Update total jobs count
         if (this.totalJobsElement) {
             this.totalJobsElement.textContent = this.totalJobs;
         }
         
-        // Calculate REAL average match percentage from AI analysis
+        // FIXED: Calculate REAL average match percentage from ALL jobs
         if (this.jobResults.length > 0) {
-            const jobsWithMatches = this.jobResults.filter(job => job.matchPercentage);
+            const jobsWithMatches = this.jobResults.filter(job => job.matchPercentage && job.matchPercentage > 0);
             console.log(`📊 Jobs with match percentages: ${jobsWithMatches.length}/${this.jobResults.length}`);
             
             if (jobsWithMatches.length > 0) {
@@ -641,10 +670,41 @@ class AIJobMatcher {
                 if (this.matchPercentage) {
                     this.matchPercentage.textContent = `${avgMatch}%`;
                 }
-                console.log(`📊 Average match percentage: ${avgMatch}%`);
+                console.log(`📊 FINAL Average match percentage: ${avgMatch}%`);
             } else {
                 if (this.matchPercentage) {
-                    this.matchPercentage.textContent = 'Analyzing...';
+                    this.matchPercentage.textContent = 'No matches';
+                }
+            }
+        }
+    }
+
+    // FIXED: Update existing updateJobStats to only be used for filtering, not during search
+    updateJobStats() {
+        // Only used when filtering existing results, not during search
+        const currentJobs = this.currentFilteredJobs.length > 0 ? this.currentFilteredJobs : this.jobResults;
+        
+        console.log(`📊 Updating filter stats for ${currentJobs.length} jobs`);
+        
+        if (this.totalJobsElement) {
+            this.totalJobsElement.textContent = currentJobs.length;
+        }
+        
+        // Calculate average match percentage for filtered results
+        if (currentJobs.length > 0) {
+            const jobsWithMatches = currentJobs.filter(job => job.matchPercentage && job.matchPercentage > 0);
+            
+            if (jobsWithMatches.length > 0) {
+                const avgMatch = Math.round(
+                    jobsWithMatches.reduce((sum, job) => sum + job.matchPercentage, 0) / jobsWithMatches.length
+                );
+                if (this.matchPercentage) {
+                    this.matchPercentage.textContent = `${avgMatch}%`;
+                }
+                console.log(`📊 Filtered average match percentage: ${avgMatch}%`);
+            } else {
+                if (this.matchPercentage) {
+                    this.matchPercentage.textContent = 'No matches';
                 }
             }
         }
@@ -1011,7 +1071,6 @@ class AIJobMatcher {
 
     displayFilteredResults(filteredJobs) {
         this.currentFilteredJobs = filteredJobs;
-        this.totalJobsElement.textContent = filteredJobs.length;
         this.jobsGrid.innerHTML = '';
 
         filteredJobs.forEach(job => {
@@ -1021,16 +1080,8 @@ class AIJobMatcher {
 
         this.displayedJobsCount = filteredJobs.length;
 
-        // REAL AI MATCH AVERAGE from filtered jobs
-        const jobsWithMatches = filteredJobs.filter(job => job.matchPercentage);
-        if (jobsWithMatches.length > 0) {
-            const avgMatch = Math.round(
-                jobsWithMatches.reduce((sum, job) => sum + job.matchPercentage, 0) / jobsWithMatches.length
-            );
-            this.matchPercentage.textContent = `${avgMatch}%`;
-        } else {
-            this.matchPercentage.textContent = 'No matches';
-        }
+        // FIXED: Update stats for filtered results only
+        this.updateJobStats();
     }
 
     updateFilterChips() {

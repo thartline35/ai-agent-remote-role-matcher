@@ -1,4 +1,4 @@
-// Enhanced index.js with better error handling, timeout management, and API optimization
+// index.js
 
 import dotenv from "dotenv";
 import express from "express";
