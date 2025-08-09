@@ -842,12 +842,13 @@ IMPORTANT: We are aiming for 70%+ matches. If there is ANY reasonable relevance,
 
 CRITICAL INSTRUCTION FOR "missingRequirements": 
 - Step 1: FIRST identify what specific skills/qualifications the JOB POSTING explicitly requires or asks for
-- Step 2: THEN check if the CANDIDATE has those job-required skills in their profile
+- Step 2: THEN check if the CANDIDATE has those job-required skills in the resume uploaded
 - Step 3: List ONLY job requirements that the candidate is missing (job asks for X, but candidate doesn't have X)
-- WRONG APPROACH: Do NOT list candidate skills that aren't mentioned in the job (candidate has Y, but job doesn't mention Y)
-- CORRECT APPROACH: Only list what the job needs that the candidate lacks
+- WRONG APPROACH: Do NOT list candidate skills from their resume that aren't mentioned in the job (candidate has Y, but job doesn't mention Y)
+- CORRECT APPROACH: Only list what the job needs that the candidate lacks from their resume uploaded
 - Example: If job requires "Python" and candidate doesn't have Python → list "Python"
 - Example: If candidate has "Java" but job doesn't mention Java → DO NOT list "Java"
+- REQUIRED: IF THERE ARE NO MISSING REQUIREMENTS, THEN LIST "NONE" AND THE JOB IS MATCHED 100%!!!!
 
 CRITICAL: For "missingRequirements", list ONLY the skills/qualifications that the JOB LISTING from the APIREQUIRES but the CANDIDATE DOES NOT HAVE.
 CRITICAL: IF the job listing shows Master's degree as a requirement, but the resume uploaded does not show a Master's degree, then the missing requirement is "Master's degree".
