@@ -124,57 +124,98 @@ function resetApiStatusIfNeeded() {
     return false;
 }
 
-function checkApiKeyForSource(sourceName) {
-    console.log(`\n🔑 === CHECKING ${sourceName} ===`);
+function checkApiKeyForSourceEnhanced(sourceName) {
+    const checkId = `check-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`\n🔑 [${checkId}] === CHECKING ${sourceName} ===`);
     
     resetApiStatusIfNeeded();
     
     if (apiStatus.exhaustedApis.has(sourceName)) {
-        console.log(`⏭️ ${sourceName}: Skipping - marked as exhausted`);
         const timeSinceReset = Math.round((Date.now() - apiStatus.lastResetTime) / 1000 / 60);
-        console.log(`   Will retry in ${Math.round((apiStatus.resetInterval / 1000 / 60) - timeSinceReset)} minutes`);
+        const nextResetIn = Math.round((apiStatus.resetInterval / 1000 / 60) - timeSinceReset);
+        console.log(`⏭️ [${checkId}] ${sourceName}: Skipping - marked as exhausted`);
+        console.log(`   [${checkId}] Time since reset: ${timeSinceReset} minutes`);
+        console.log(`   [${checkId}] Will retry in: ${nextResetIn} minutes`);
+        console.log(`   [${checkId}] Reset interval: ${Math.round(apiStatus.resetInterval / 1000 / 60)} minutes`);
         return false;
     }
     
     let hasKey = false;
+    let keyDetails = {};
+    
     switch (sourceName) {
         case 'Theirstack':
             hasKey = !!process.env.THEIRSTACK_API_KEY;
+            keyDetails = {
+                keyExists: !!process.env.THEIRSTACK_API_KEY,
+                keyLength: process.env.THEIRSTACK_API_KEY ? process.env.THEIRSTACK_API_KEY.length : 0,
+                keyPrefix: process.env.THEIRSTACK_API_KEY ? process.env.THEIRSTACK_API_KEY.substring(0, 8) + '...' : 'none'
+            };
             break;
         case 'Adzuna':
             hasKey = !!(process.env.ADZUNA_APP_ID && process.env.ADZUNA_API_KEY);
+            keyDetails = {
+                appIdExists: !!process.env.ADZUNA_APP_ID,
+                appIdLength: process.env.ADZUNA_APP_ID ? process.env.ADZUNA_APP_ID.length : 0,
+                apiKeyExists: !!process.env.ADZUNA_API_KEY,
+                apiKeyLength: process.env.ADZUNA_API_KEY ? process.env.ADZUNA_API_KEY.length : 0,
+                appIdPrefix: process.env.ADZUNA_APP_ID ? process.env.ADZUNA_APP_ID.substring(0, 8) + '...' : 'none',
+                apiKeyPrefix: process.env.ADZUNA_API_KEY ? process.env.ADZUNA_API_KEY.substring(0, 8) + '...' : 'none'
+            };
             break;
         case 'TheMuse':
             hasKey = !!process.env.THEMUSE_API_KEY;
+            keyDetails = {
+                keyExists: !!process.env.THEMUSE_API_KEY,
+                keyLength: process.env.THEMUSE_API_KEY ? process.env.THEMUSE_API_KEY.length : 0,
+                keyPrefix: process.env.THEMUSE_API_KEY ? process.env.THEMUSE_API_KEY.substring(0, 8) + '...' : 'none'
+            };
             break;
         case 'Reed':
             hasKey = !!process.env.REED_API_KEY;
+            keyDetails = {
+                keyExists: !!process.env.REED_API_KEY,
+                keyLength: process.env.REED_API_KEY ? process.env.REED_API_KEY.length : 0,
+                keyPrefix: process.env.REED_API_KEY ? process.env.REED_API_KEY.substring(0, 8) + '...' : 'none'
+            };
             break;
         case 'JSearch-RapidAPI':
         case 'RapidAPI-Jobs':
             hasKey = !!process.env.RAPIDAPI_KEY;
+            keyDetails = {
+                keyExists: !!process.env.RAPIDAPI_KEY,
+                keyLength: process.env.RAPIDAPI_KEY ? process.env.RAPIDAPI_KEY.length : 0,
+                keyPrefix: process.env.RAPIDAPI_KEY ? process.env.RAPIDAPI_KEY.substring(0, 8) + '...' : 'none'
+            };
             break;
         default:
             hasKey = false;
+            keyDetails = { error: 'Unknown source' };
     }
     
     if (!hasKey) {
-        console.log(`❌ ${sourceName}: API key missing`);
+        console.log(`❌ [${checkId}] ${sourceName}: API key missing`);
+        console.log(`🔍 [${checkId}] Key details:`, JSON.stringify(keyDetails, null, 2));
         return false;
     }
     
-    console.log(`✅ ${sourceName}: API key exists - proceeding`);
+    console.log(`✅ [${checkId}] ${sourceName}: API key exists - proceeding`);
+    console.log(`🔍 [${checkId}] Key details:`, JSON.stringify(keyDetails, null, 2));
     return true;
 }
 
-async function makeApiCallWithExhaustionDetection(sourceName, apiCallFunction, ...args) {
-    console.log(`📞 Making API call to ${sourceName}...`);
+async function makeApiCallWithExhaustionDetectionEnhanced(sourceName, apiCallFunction, ...args) {
+    const startTime = Date.now();
+    const callId = `${sourceName}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    console.log(`📞 [${callId}] Making API call to ${sourceName}...`);
     
     try {
         const result = await apiCallFunction(...args);
+        const duration = Date.now() - startTime;
         
         if (apiStatus.suspiciousApis.has(sourceName)) {
-            console.log(`✅ ${sourceName}: Successful response - clearing suspicious count`);
+            console.log(`✅ [${callId}] ${sourceName}: Successful response - clearing suspicious count`);
             apiStatus.suspiciousApis.delete(sourceName);
         }
         
@@ -185,38 +226,97 @@ async function makeApiCallWithExhaustionDetection(sourceName, apiCallFunction, .
             }
         }
         
+        console.log(`✅ [${callId}] ${sourceName}: API call successful in ${duration}ms, returned ${Array.isArray(result) ? result.length : 'non-array'} items`);
         return result;
         
     } catch (error) {
-        console.log(`❌ ${sourceName}: API call failed - analyzing error...`);
+        const duration = Date.now() - startTime;
+        const errorDetails = {
+            message: error.message,
+            code: error.code || 'unknown',
+            status: error.response?.status || 'unknown',
+            statusText: error.response?.statusText || 'unknown',
+            data: error.response?.data || 'no data',
+            headers: error.response?.headers ? Object.keys(error.response.headers) : 'no headers',
+            url: error.config?.url || 'unknown',
+            method: error.config?.method || 'unknown',
+            timeout: error.config?.timeout || 'unknown'
+        };
+        
+        console.log(`❌ [${callId}] ${sourceName}: API call failed after ${duration}ms`);
+        console.log(`🔍 [${callId}] Error details:`, JSON.stringify(errorDetails, null, 2));
         
         const exhaustionCheck = detectApiExhaustion(error, error.response, sourceName);
         
         if (exhaustionCheck.isExhausted) {
             markApiAsExhausted(sourceName, exhaustionCheck.reason);
+            console.log(`🚫 [${callId}] ${sourceName}: Marked as exhausted - ${exhaustionCheck.reason}`);
             return [];
         }
         
-        console.log(`⚠️ ${sourceName}: Non-exhaustion error - ${error.message}`);
+        console.log(`⚠️ [${callId}] ${sourceName}: Non-exhaustion error - ${error.message}`);
         return [];
     }
 }
 
-function getApiStatusReport() {
+function getApiStatusReportEnhanced() {
+    const reportId = `report-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const currentTime = Date.now();
+    const timeSinceReset = currentTime - apiStatus.lastResetTime;
+    const nextResetIn = Math.round((apiStatus.resetInterval - timeSinceReset) / 1000 / 60);
+    
     const report = {
+        reportId: reportId,
         timestamp: new Date().toISOString(),
         exhaustedApis: Array.from(apiStatus.exhaustedApis),
         suspiciousApis: Object.fromEntries(apiStatus.suspiciousApis),
         lastResetTime: new Date(apiStatus.lastResetTime).toISOString(),
-        nextResetIn: Math.round((apiStatus.resetInterval - (Date.now() - apiStatus.lastResetTime)) / 1000 / 60),
-        totalExhausted: apiStatus.exhaustedApis.size
+        nextResetIn: nextResetIn,
+        totalExhausted: apiStatus.exhaustedApis.size,
+        totalSuspicious: apiStatus.suspiciousApis.size,
+        resetIntervalMinutes: Math.round(apiStatus.resetInterval / 1000 / 60),
+        timeSinceResetMinutes: Math.round(timeSinceReset / 1000 / 60),
+        systemHealth: {
+            totalApis: 6, // Total number of APIs in the system
+            healthyApis: 6 - apiStatus.exhaustedApis.size - apiStatus.suspiciousApis.size,
+            exhaustedPercentage: Math.round((apiStatus.exhaustedApis.size / 6) * 100),
+            suspiciousPercentage: Math.round((apiStatus.suspiciousApis.size / 6) * 100),
+            healthyPercentage: Math.round(((6 - apiStatus.exhaustedApis.size - apiStatus.suspiciousApis.size) / 6) * 100)
+        },
+        detailedStatus: {
+            exhausted: Array.from(apiStatus.exhaustedApis).map(api => ({
+                name: api,
+                status: 'exhausted',
+                timeSinceExhaustion: 'unknown', // Could be enhanced to track individual exhaustion times
+                estimatedRecovery: nextResetIn > 0 ? `${nextResetIn} minutes` : 'immediate'
+            })),
+            suspicious: Array.from(apiStatus.suspiciousApis.entries()).map(([api, count]) => ({
+                name: api,
+                status: 'suspicious',
+                suspiciousCount: count,
+                maxSuspiciousFailures: apiStatus.maxSuspiciousFailures,
+                remainingFailuresBeforeExhaustion: apiStatus.maxSuspiciousFailures - count
+            })),
+            healthy: ['JSearch-RapidAPI', 'Adzuna', 'TheMuse', 'Reed', 'RapidAPI-Jobs', 'Theirstack']
+                .filter(api => !apiStatus.exhaustedApis.has(api) && !apiStatus.suspiciousApis.has(api))
+                .map(api => ({
+                    name: api,
+                    status: 'healthy',
+                    available: true
+                }))
+        }
     };
     
-    console.log('\n📊 === API STATUS REPORT ===');
-    console.log(`Exhausted APIs: [${report.exhaustedApis.join(', ')}]`);
-    console.log(`Suspicious APIs: ${JSON.stringify(report.suspiciousApis)}`);
-    console.log(`Next reset in: ${report.nextResetIn} minutes`);
-    console.log('============================\n');
+    console.log(`\n📊 [${reportId}] === ENHANCED API STATUS REPORT ===`);
+    console.log(`📅 [${reportId}] Report generated at: ${report.timestamp}`);
+    console.log(`🔄 [${reportId}] Last reset: ${report.timeSinceResetMinutes} minutes ago`);
+    console.log(`⏰ [${reportId}] Next reset in: ${report.nextResetIn} minutes`);
+    console.log(`📊 [${reportId}] System health: ${report.systemHealth.healthyPercentage}% healthy, ${report.systemHealth.exhaustedPercentage}% exhausted, ${report.systemHealth.suspiciousPercentage}% suspicious`);
+    console.log(`🚫 [${reportId}] Exhausted APIs (${report.totalExhausted}): [${report.exhaustedApis.join(', ')}]`);
+    console.log(`⚠️ [${reportId}] Suspicious APIs (${report.totalSuspicious}): ${JSON.stringify(report.suspiciousApis)}`);
+    console.log(`✅ [${reportId}] Healthy APIs (${report.systemHealth.healthyApis}): [${report.detailedStatus.healthy.map(h => h.name).join(', ')}]`);
+    console.log(`🔍 [${reportId}] Detailed status available in report object`);
+    console.log(`==========================================\n`);
     
     return report;
 }
@@ -241,10 +341,10 @@ export default async function handler(req, res) {
     }
 
     // Handle different request methods
-    if (req.method === 'GET' && req.url?.includes('/api-status')) {
-        const statusReport = getApiStatusReport();
-        return res.status(200).json(statusReport);
-    }
+            if (req.method === 'GET' && req.url?.includes('/api-status')) {
+            const statusReport = getApiStatusReportEnhanced();
+            return res.status(200).json(statusReport);
+        }
     
     if (req.method === 'POST' && req.url?.includes('/reset-api-status')) {
         manualResetApiStatus();
@@ -344,7 +444,7 @@ export default async function handler(req, res) {
         console.log(`Total search time: ${totalSearchTime}s`);
         console.log(`Jobs found: ${totalJobsFound}`);
 
-        const apiStatusReport = getApiStatusReport();
+        const apiStatusReport = getApiStatusReportEnhanced();
         
         const finalData = {
             type: 'search_complete',
@@ -430,7 +530,7 @@ async function scrapeJobListingsWithStreaming(analysis, filters, onJobFound, onP
         onProgress(`Searching ${source.name}...`, sourceStartProgress);
         
         try {
-            const hasApiKey = checkApiKeyForSource(source.name);
+            const hasApiKey = checkApiKeyForSourceEnhanced(source.name);
             if (!hasApiKey) {
                 console.log(`❌ ${source.name}: Missing API key - SKIPPING`);
                 currentProgress = sourceEndProgress;
@@ -798,7 +898,7 @@ Return your analysis as JSON:
 
 // Enhanced API functions with automatic exhaustion detection
 async function searchJSearchRapidAPIWithDetection(query, filters) {
-    return makeApiCallWithExhaustionDetection('JSearch-RapidAPI', async () => {
+            return makeApiCallWithExhaustionDetectionEnhanced('JSearch-RapidAPI', async () => {
         const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
         
         const response = await axios.get('https://jsearch.p.rapidapi.com/search', {
@@ -847,7 +947,7 @@ async function searchJSearchRapidAPIWithDetection(query, filters) {
 }
 
 async function searchAdzunaJobsWithDetection(query, filters) {
-    return makeApiCallWithExhaustionDetection('Adzuna', async () => {
+            return makeApiCallWithExhaustionDetectionEnhanced('Adzuna', async () => {
         const ADZUNA_APP_ID = process.env.ADZUNA_APP_ID;
         const ADZUNA_API_KEY = process.env.ADZUNA_API_KEY;
         
@@ -884,7 +984,7 @@ async function searchAdzunaJobsWithDetection(query, filters) {
 }
 
 async function searchTheMuseJobsWithDetection(query, filters) {
-    return makeApiCallWithExhaustionDetection('TheMuse', async () => {
+            return makeApiCallWithExhaustionDetectionEnhanced('TheMuse', async () => {
         const THEMUSE_API_KEY = process.env.THEMUSE_API_KEY;
         
         const categories = [];
@@ -935,7 +1035,7 @@ async function searchTheMuseJobsWithDetection(query, filters) {
 }
 
 async function searchRapidAPIJobsWithDetection(query, filters) {
-    return makeApiCallWithExhaustionDetection('RapidAPI-Jobs', async () => {
+            return makeApiCallWithExhaustionDetectionEnhanced('RapidAPI-Jobs', async () => {
         const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY;
         
         const response = await axios.get('https://jobs-api14.p.rapidapi.com/list', {
@@ -977,7 +1077,7 @@ async function searchRapidAPIJobsWithDetection(query, filters) {
 }
 
 async function searchReedJobsWithDetection(query, filters) {
-    return makeApiCallWithExhaustionDetection('Reed', async () => {
+            return makeApiCallWithExhaustionDetectionEnhanced('Reed', async () => {
         const REED_API_KEY = process.env.REED_API_KEY;
         
         const response = await axios.get('https://www.reed.co.uk/api/1.0/search', {
@@ -1015,7 +1115,7 @@ async function searchReedJobsWithDetection(query, filters) {
 }
 
 async function searchTheirstackJobsWithDetection(query, filters) {
-    return makeApiCallWithExhaustionDetection('Theirstack', async () => {
+            return makeApiCallWithExhaustionDetectionEnhanced('Theirstack', async () => {
         const THEIRSTACK_API_KEY = process.env.THEIRSTACK_API_KEY;
         
         if (theirstackUsageCount >= 200) {
