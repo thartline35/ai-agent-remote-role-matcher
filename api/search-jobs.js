@@ -341,10 +341,10 @@ export default async function handler(req, res) {
     }
 
     // Handle different request methods
-            if (req.method === 'GET' && req.url?.includes('/api-status')) {
-            const statusReport = getApiStatusReportEnhanced();
-            return res.status(200).json(statusReport);
-        }
+    if (req.method === 'GET' && req.url?.includes('/api-status')) {
+        const statusReport = getApiStatusReportEnhanced();
+        return res.status(200).json(statusReport);
+    }
     
     if (req.method === 'POST' && req.url?.includes('/reset-api-status')) {
         manualResetApiStatus();
