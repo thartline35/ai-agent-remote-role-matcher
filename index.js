@@ -1,4 +1,4 @@
-// index.js
+// index.js - Updated with Reporting API implementation
 
 import dotenv from "dotenv";
 import express from "express";
@@ -11,11 +11,20 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load environment variables - use local.env for development, Vercel env vars for production
+// Load environment variables
 dotenv.config({ path: './local.env' });
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+// Determine base URL for reporting endpoints
+const getBaseUrl = (req) => {
+    // In production, this would be your actual domain
+    if (process.env.NODE_ENV === 'production') {
+        return process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://your-app.vercel.app';
+    }
+    return `http://localhost:${port}`;
+};
 
 // Middleware with enhanced configuration
 app.use(cors({
@@ -25,18 +34,87 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// REPORTING API MIDDLEWARE
+app.use((req, res, next) => {
+    const baseUrl = getBaseUrl(req);
+    
+    // Configure Reporting-Endpoints header
+    const reportingEndpoints = [
+        `main-endpoint="${baseUrl}/api/reports"`,
+        `default="${baseUrl}/api/reports"`,
+        `csp-endpoint="${baseUrl}/api/reports"`,
+        `security-endpoint="${baseUrl}/api/reports"`
+    ].join(', ');
+    
+    res.setHeader('Reporting-Endpoints', reportingEndpoints);
+    
+    // Content Security Policy with reporting
+    const cspPolicy = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://api.anthropic.com",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+        "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com",
+        "img-src 'self' data: https: blob:",
+        "connect-src 'self' https://api.anthropic.com https://*.rapidapi.com https://api.adzuna.com https://www.themuse.com https://www.reed.co.uk https://api.theirstack.com https://jsearch.p.rapidapi.com https://jobs-api14.p.rapidapi.com",
+        "worker-src 'self' blob:",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+        "upgrade-insecure-requests",
+        "report-to csp-endpoint"
+    ].join('; ');
+    
+    res.setHeader('Content-Security-Policy', cspPolicy);
+    
+    // Document Policy with reporting
+    res.setHeader('Document-Policy', 'document-write=?0, js-profiling=?0; report-to=main-endpoint');
+    
+    // Cross-Origin Policies with reporting
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin; report-to=security-endpoint');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp; report-to=security-endpoint');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    
+    // Permissions Policy
+    res.setHeader('Permissions-Policy', [
+        'geolocation=()',
+        'microphone=()',
+        'camera=()',
+        'payment=()',
+        'usb=()',
+        'magnetometer=()',
+        'gyroscope=()',
+        'speaker=()',
+        'ambient-light-sensor=()',
+        'accelerometer=()',
+        'battery=()',
+        'display-capture=()',
+        'document-domain=()'
+    ].join(', '));
+    
+    // Additional security headers
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+    
+    next();
+});
+
 // Serve static files
 app.use(express.static(__dirname));
 
-// Enhanced timeout middleware with different timeouts for different endpoints
+// Enhanced timeout middleware
 app.use((req, res, next) => {
     let timeout;
     
-    // Set different timeouts based on endpoint
     if (req.path === '/api/search-jobs') {
-        timeout = 600000; // 10 minutes for job search (increased from 3 minutes)
+        timeout = 600000; // 10 minutes for job search
     } else if (req.path === '/api/analyze-resume') {
         timeout = 60000; // 1 minute for resume analysis
+    } else if (req.path === '/api/reports') {
+        timeout = 10000; // 10 seconds for report collection
     } else {
         timeout = 30000; // 30 seconds for other requests
     }
@@ -50,19 +128,16 @@ app.use((req, res, next) => {
         }
     }, timeout);
 
-    res.on('finish', () => {
-        clearTimeout(timeoutId);
-    });
-
-    res.on('close', () => {
-        clearTimeout(timeoutId);
-    });
+    res.on('finish', () => clearTimeout(timeoutId));
+    res.on('close', () => clearTimeout(timeoutId));
 
     next();
 });
 
-// Health check endpoint
+// Health check endpoint with reporting status
 app.get('/api/health', (req, res) => {
+    const baseUrl = getBaseUrl(req);
+    
     const healthStatus = {
         status: 'healthy',
         timestamp: new Date().toISOString(),
@@ -73,6 +148,16 @@ app.get('/api/health', (req, res) => {
             themuse: process.env.THEMUSE_API_KEY ? 'configured' : 'missing',
             reed: process.env.REED_API_KEY ? 'configured' : 'missing',
             rapidapi: process.env.RAPIDAPI_KEY ? 'configured' : 'missing'
+        },
+        reporting: {
+            enabled: true,
+            endpoint: `${baseUrl}/api/reports`,
+            policies: {
+                csp: 'enabled',
+                documentPolicy: 'enabled',
+                crossOriginPolicies: 'enabled',
+                permissionsPolicy: 'enabled'
+            }
         }
     };
     res.json(healthStatus);
@@ -82,11 +167,111 @@ app.get('/api/health', (req, res) => {
 import searchJobsHandler from './api/search-jobs.js';
 import analyzeResumeHandler from './api/analyze-resume.js';
 import parsePdfHandler from './api/parse-pdf.js';
+import reportsHandler from './api/report.js';
 
-// API routes
+// Main API routes
 app.post('/api/search-jobs', searchJobsHandler);
 app.post('/api/analyze-resume', analyzeResumeHandler);
 app.post('/api/parse-pdf', parsePdfHandler);
+
+// Reporting API routes
+app.use('/api/reports', reportsHandler);
+
+// Reports dashboard endpoint
+app.get('/api/reports-dashboard', async (req, res) => {
+    try {
+        // Import the summary function
+        const { getReportSummary } = await import('./api/report.js');
+        const summary = getReportSummary();
+        
+        res.json({
+            success: true,
+            summary,
+            endpoint: `${getBaseUrl(req)}/api/reports`,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Error getting report summary:', error);
+        res.status(500).json({ error: 'Failed to get report summary' });
+    }
+});
+
+// Test endpoint to generate sample reports (for testing)
+app.get('/api/test-reports', (req, res) => {
+    // This endpoint intentionally violates policies to generate test reports
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Report Testing Page</title>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 20px; }
+                .violation { background: #ffe6e6; padding: 10px; margin: 10px 0; border-left: 4px solid #ff4444; }
+                button { padding: 10px 20px; margin: 10px; cursor: pointer; }
+            </style>
+        </head>
+        <body>
+            <h1>Reporting API Test Page</h1>
+            <p>This page intentionally violates policies to generate test reports.</p>
+            
+            <div class="violation">
+                <h3>CSP Violation Test</h3>
+                <button onclick="testCSPViolation()">Trigger CSP Violation</button>
+                <p>This will try to load a script from an unauthorized domain.</p>
+            </div>
+            
+            <div class="violation">
+                <h3>Document Policy Violation Test</h3>
+                <button onclick="testDocumentPolicyViolation()">Trigger Document Policy Violation</button>
+                <p>This will try to use document.write which is blocked by our policy.</p>
+            </div>
+            
+            <div class="violation">
+                <h3>Deprecation Warning Test</h3>
+                <button onclick="testDeprecationWarning()">Trigger Deprecation Warning</button>
+                <p>This will use a deprecated API.</p>
+            </div>
+
+            <script>
+                function testCSPViolation() {
+                    // This will violate the CSP and generate a report
+                    const script = document.createElement('script');
+                    script.src = 'https://malicious.example.com/evil.js';
+                    document.head.appendChild(script);
+                }
+                
+                function testDocumentPolicyViolation() {
+                    try {
+                        // This will violate the Document Policy
+                        document.write('<p>This should not work!</p>');
+                    } catch (e) {
+                        console.log('Document.write blocked:', e);
+                    }
+                }
+                
+                function testDeprecationWarning() {
+                    // Use a deprecated API
+                    if (window.webkitStorageInfo) {
+                        const info = window.webkitStorageInfo;
+                        console.log('Using deprecated webkitStorageInfo:', info);
+                    }
+                    
+                    // Another deprecated API
+                    if (navigator.getUserMedia) {
+                        console.log('Using deprecated getUserMedia');
+                    }
+                }
+                
+                // Automatically generate some test violations
+                setTimeout(() => {
+                    console.log('Auto-generating test violations...');
+                    testDocumentPolicyViolation();
+                }, 2000);
+            </script>
+        </body>
+        </html>
+    `);
+});
 
 // Root route - serve the main application
 app.get('/', (req, res) => {
@@ -123,64 +308,50 @@ process.on('SIGINT', () => {
 
 // Start server if not in Vercel environment
 if (process.env.NODE_ENV !== 'production') {
-    // Start server with enhanced logging
     app.listen(port, () => {
-        console.log('\n' + '='.repeat(50));
-        console.log('🚀 ENHANCED AI JOB MATCHER SERVER STARTED');
-        console.log('='.repeat(50));
-        console.log(`📍 Server URL: http://localhost:${port}`);
+        const baseUrl = `http://localhost:${port}`;
+        
+        console.log('\n' + '='.repeat(60));
+        console.log('🚀 AI JOB MATCHER SERVER WITH REPORTING API');
+        console.log('='.repeat(60));
+        console.log(`📍 Server URL: ${baseUrl}`);
         console.log(`⏰ Started at: ${new Date().toISOString()}`);
         console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
         
         console.log('\n📋 AVAILABLE ENDPOINTS:');
-        console.log('  GET  /api/health           - Health check');
-        console.log('  POST /api/parse-pdf        - Parse PDF resume (Vercel API)');
-        console.log('  POST /api/analyze-resume   - Analyze resume text (Vercel API)');
-        console.log('  POST /api/search-jobs      - Search for matching jobs (Vercel API)');
+        console.log('  GET  /api/health              - Health check with reporting status');
+        console.log('  POST /api/parse-pdf           - Parse PDF resume');
+        console.log('  POST /api/analyze-resume      - Analyze resume text');
+        console.log('  POST /api/search-jobs         - Search for matching jobs');
+        console.log('  POST /api/reports             - Receive browser reports');
+        console.log('  GET  /api/reports             - View collected reports');
+        console.log('  GET  /api/reports-dashboard   - Reports dashboard data');
+        console.log('  GET  /api/test-reports        - Generate test reports');
         
-        console.log('\n🔑 API CONFIGURATION STATUS:');
-        console.log(`  OpenAI API Key:     ${process.env.OPENAI_API_KEY ? '✅ Configured' : '❌ Missing (REQUIRED)'}`);
-        console.log(`  Theirstack API Key: ${process.env.THEIRSTACK_API_KEY ? '✅ Configured' : '❌ Missing (Optional)'}`);
-        console.log(`  Adzuna App ID:      ${process.env.ADZUNA_APP_ID ? '✅ Configured' : '❌ Missing (Optional)'}`);
-        console.log(`  Adzuna API Key:     ${process.env.ADZUNA_API_KEY ? '✅ Configured' : '❌ Missing (Optional)'}`);
-        console.log(`  TheMuse API Key:    ${process.env.THEMUSE_API_KEY ? '✅ Configured' : '❌ Missing (Optional)'}`);
-        console.log(`  Reed API Key:       ${process.env.REED_API_KEY ? '✅ Configured' : '❌ Missing (Optional)'}`);
-        console.log(`  RapidAPI Key:       ${process.env.RAPIDAPI_KEY ? '✅ Configured' : '❌ Missing (Optional)'}`);
+        console.log('\n📊 REPORTING API FEATURES:');
+        console.log('  ✅ Content Security Policy reporting');
+        console.log('  ✅ Document Policy violation reporting'); 
+        console.log('  ✅ Cross-Origin Policy reporting');
+        console.log('  ✅ Deprecation warning reporting');
+        console.log('  ✅ Browser intervention reporting');
+        console.log('  ✅ Permissions Policy violations');
         
-        // Count configured APIs
-        const configuredAPIs = [
-            process.env.OPENAI_API_KEY,
-            process.env.THEIRSTACK_API_KEY,
-            process.env.ADZUNA_APP_ID && process.env.ADZUNA_API_KEY,
-            process.env.THEMUSE_API_KEY,
-            process.env.REED_API_KEY,
-            process.env.RAPIDAPI_KEY
-        ].filter(Boolean).length;
+        console.log('\n🔍 MONITORING:');
+        console.log(`  Reports Endpoint: ${baseUrl}/api/reports`);
+        console.log(`  Dashboard Data:   ${baseUrl}/api/reports-dashboard`);
+        console.log(`  Test Reports:     ${baseUrl}/api/test-reports`);
         
-        console.log(`\n📊 JOB SEARCH CAPABILITY: ${configuredAPIs}/6 APIs configured`);
+        console.log('\n🛡️ SECURITY POLICIES ENABLED:');
+        console.log('  🔒 Content Security Policy (with reporting)');
+        console.log('  📋 Document Policy (blocks document.write)');
+        console.log('  🌐 Cross-Origin-Opener-Policy');
+        console.log('  🔗 Cross-Origin-Embedder-Policy');
+        console.log('  🚫 Permissions Policy (restrictive)');
+        console.log('  🛡️ Additional security headers');
         
-        if (!process.env.OPENAI_API_KEY) {
-            console.log('\n⚠️  WARNING: OpenAI API key is missing! Resume analysis will fail.');
-        }
-        
-        if (configuredAPIs === 0) {
-            console.log('⚠️  WARNING: No job search APIs configured! Job search will fail.');
-        } else if (configuredAPIs < 6) {
-            console.log(`ℹ️  INFO: ${6 - configuredAPIs} job search APIs are missing. Some job sources won't be available.`);
-        }
-        
-        console.log('\n🎯 FEATURES ENABLED:');
-        console.log('  ✅ Enhanced resume analysis with role understanding');
-        console.log('  ✅ Remote job filtering');
-        console.log('  ✅ AI-powered job matching');
-        console.log('  ✅ Real-time job search updates');
-        console.log('  ✅ Comprehensive error handling');
-        console.log('  ✅ Request timeout management');
-        console.log('  ✅ Rate limiting protection');
-        
-        console.log('\n' + '='.repeat(50));
-        console.log('Ready to process job matching requests! 🎉');
-        console.log('='.repeat(50) + '\n');
+        console.log('\n' + '='.repeat(60));
+        console.log('Ready to process requests and collect reports! 📈');
+        console.log('='.repeat(60) + '\n');
     });
 }
 

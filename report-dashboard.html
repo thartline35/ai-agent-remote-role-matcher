@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Job Matcher - Reporting Dashboard</title>
+    <meta name="description" content="Monitor security violations, deprecated API usage, and browser interventions">
+    
+    <!-- Security Headers -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data:;">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary-color: #4f46e5;
+            --secondary-color: #06b6d4;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 0;
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 1.25rem;
+        }
+
+        .navbar-brand i {
+            color: var(--primary-color);
+            font-size: 1.5rem;
+        }
+
+        .navbar-nav {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .nav-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-link:hover {
+            color: var(--primary-color);
+        }
+
+        .nav-link.active {
+            color: var(--primary-color);
+        }
+
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .breadcrumb {
+            margin-bottom: 2rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .breadcrumb a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .page-header {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .page-header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .page-header h1 i {
+            color: var(--primary-color);
+            font-size: 1.75rem;
+        }
+
+        .page-header p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+
+        .status-banner {
+            background: linear-gradient(135deg, var(--success-color), #059669);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 0.75rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            box-shadow: var(--shadow);
+        }
+
+        .status-banner.warning {
+            background: linear-gradient(135deg, var(--warning-color), #d97706);
+        }
+
+        .status-banner.error {
+            background: linear-gradient(135deg, var(--error-color), #dc2626);
+        }
+
+        .status-banner i {
+            font-size: 1.25rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            box-shadow: var(--shadow);
+            border-left: 4px solid var(--primary-color);
+            transition: all 0.2s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .stat-card.error { border-left-color: var(--error-color); }
+        .stat-card.warning { border-left-color: var(--warning-color); }
+        .stat-card.success { border-left-color: var(--success-color); }
+        .stat-card.info { border-left-color: var(--secondary-color); }
+
+        .stat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .stat-title {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .stat-icon {
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .stat-icon.error { background: #fef2f2; color: var(--error-color); }
+        .stat-icon.warning { background: #fffbeb; color: var(--warning-color); }
+        .stat-icon.success { background: #f0fdf4; color: var(--success-color); }
+        .stat-icon.info { background: #f0f9ff; color: var(--secondary-color); }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .stat-trend {
+            font-size: 0.75rem;
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .stat-trend.up {
+            color: var(--error-color);
+        }
+
+        .stat-trend.down {
+            color: var(--success-color);
+        }
+
+        .controls {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .control-group label {
+            font-weight: 500;
+            color: var(--text-primary);
+            white-space: nowrap;
+        }
+
+        .control-group select,
+        .control-group input,
+        .control-group button {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            background: white;
+            color: var(--text-primary);
+            transition: all 0.2s ease;
+        }
+
+        .control-group select:focus,
+        .control-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .control-group button {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 500;
+        }
+
+        .control-group button:hover {
+            background: #3730a3;
+        }
+
+        .control-group button.secondary {
+            background: var(--text-secondary);
+        }
+
+        .control-group button.secondary:hover {
+            background: #475569;
+        }
+
+        .reports-section {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: var(--shadow);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            gap: 1rem;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+
+        .loading i {
+            font-size: 2rem;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+            display: block;
+            color: var(--primary-color);
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #fef2f2;
+            color: var(--error-color);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid #fecaca;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+            color: var(--text-secondary);
+        }
+
+        .empty-state h3 {
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .report-card {
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .report-card:hover {
+            border-color: var(--primary-color);
+            box-shadow: var(--shadow);
+            background: white;
+        }
+
+        .report-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            gap: 1rem;
+        }
+
+        .report-type {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .report-type.csp-violation { background: #fef2f2; color: #dc2626; }
+        .report-type.coep { background: #fff7ed; color: #ea580c; }
+        .report-type.coop { background: #fff7ed; color: #ea580c; }
+        .report-type.deprecation { background: #fffbeb; color: #d97706; }
+        .report-type.intervention { background: #fef3c7; color: #92400e; }
+        .report-type.document-policy-violation { background: #f3e8ff; color: #7c3aed; }
+
+        .report-time {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .report-url {
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            word-break: break-all;
+            font-family: 'Monaco', 'Menlo', monospace;
+            background: white;
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .report-summary {
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .report-details {
+            background: white;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.75rem;
+            overflow-x: auto;
+        }
+
+        .report-toggle {
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            cursor: pointer;
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            transition: background-color 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-weight: 500;
+        }
+
+        .report-toggle:hover {
+            background: #f1f5f9;
+        }
+
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .pagination button {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            background: white;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 500;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination span {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .footer {
+            margin-top: 3rem;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            padding: 2rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        @media (max-width: 768px) {
+            .dashboard {
+                padding: 1rem;
+            }
+
+            .navbar-content {
+                padding: 0 1rem;
+            }
+
+            .navbar-nav {
+                gap: 1rem;
+            }
+
+            .nav-link span {
+                display: none;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .control-group {
+                justify-content: space-between;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" class="navbar-brand">
+                <i class="fas fa-briefcase"></i>
+                AI Job Matcher
+            </a>
+            
+            <div class="navbar-nav">
+                <a href="/" class="nav-link">
+                    <i class="fas fa-home"></i>
+                    <span>Home</span>
+                </a>
+                <a href="/reports-dashboard.html" class="nav-link active">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Reports</span>
+                </a>
+                <a href="/api/test-reports" class="nav-link" target="_blank">
+                    <i class="fas fa-flask"></i>
+                    <span>Test</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="dashboard">
+        <!-- Breadcrumb -->
+        <div class="breadcrumb">
+            <a href="/">Home</a> / <span>Reporting Dashboard</span>
+        </div>
+
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1>
+                <i class="fas fa-shield-alt"></i>
+                Reporting API Dashboard
+            </h1>
+            <p>Monitor security violations, deprecated API usage, and browser interventions across your application</p>
+        </div>
+
+        <!-- Status Banner -->
+        <div id="statusBanner" class="status-banner">
+            <i class="fas fa-check-circle"></i>
+            <span>Reporting system is active and monitoring your application</span>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card info">
+                <div class="stat-header">
+                    <span class="stat-title">Total Reports</span>
+                    <div class="stat-icon info">
+                        <i class="fas fa-chart-bar"></i>
+                    </div>
+                </div>
+                <div class="stat-value" id="totalReports">0</div>
+                <div class="stat-label">All time</div>
+                <div class="stat-trend" id="totalTrend"></div>
+            </div>
+
+            <div class="stat-card warning">
+                <div class="stat-header">
+                    <span class="stat-title">Last 24 Hours</span>
+                    <div class="stat-icon warning">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                </div>
+                <div class="stat-value" id="recentReports">0</div>
+                <div class="stat-label">Recent activity</div>
+                <div class="stat-trend" id="recentTrend"></div>
+            </div>
+
+            <div class="stat-card error">
+                <div class="stat-header">
+                    <span class="stat-title">Security Issues</span>
+                    <div class="stat-icon error">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                </div>
+                <div class="stat-value" id="securityIssues">0</div>
+                <div class="stat-label">CSP & CORS violations</div>
+                <div class="stat-trend" id="securityTrend"></div>
+            </div>
+
+            <div class="stat-card success">
+                <div class="stat-header">
+                    <span class="stat-title">Deprecation Warnings</span>
+                    <div class="stat-icon success">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                </div>
+                <div class="stat-value" id="deprecationWarnings">0</div>
+                <div class="stat-label">API maintenance needed</div>
+                <div class="stat-trend" id="deprecationTrend"></div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <div class="control-group">
+                <label for="reportTypeFilter">Filter by Type:</label>
+                <select id="reportTypeFilter">
+                    <option value="">All Types</option>
+                    <option value="csp-violation">CSP Violation</option>
+                    <option value="coep">COEP Violation</option>
+                    <option value="coop">COOP Violation</option>
+                    <option value="document-policy-violation">Document Policy</option>
+                    <option value="deprecation">Deprecation</option>
+                    <option value="intervention">Intervention</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="reportLimit">Show:</label>
+                <select id="reportLimit">
+                    <option value="25">25 reports</option>
+                    <option value="50" selected>50 reports</option>
+                    <option value="100">100 reports</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <button onclick="refreshReports()">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+
+            <div class="control-group">
+                <button onclick="generateTestReports()" class="secondary">
+                    <i class="fas fa-flask"></i> Generate Test Reports
+                </button>
+            </div>
+
+            <div class="control-group">
+                <button onclick="exportReports()" class="secondary">
+                    <i class="fas fa-download"></i> Export CSV
+                </button>
+            </div>
+        </div>
+
+        <!-- Reports Section -->
+        <div class="reports-section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <i class="fas fa-list"></i>
+                    Recent Reports
+                </h2>
+                <div>
+                    <small id="lastUpdated" class="text-secondary"></small>
+                </div>
+            </div>
+
+            <div id="loadingIndicator" class="loading">
+                <i class="fas fa-spinner"></i>
+                <p>Loading reports...</p>
+            </div>
+
+            <div id="errorContainer" class="error-message" style="display: none;">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span></span>
+            </div>
+
+            <div id="reportsContainer">
+                <!-- Reports will be dynamically inserted here -->
+            </div>
+
+            <div id="emptyState" class="empty-state" style="display: none;">
+                <i class="fas fa-inbox"></i>
+                <h3>No Reports Found</h3>
+                <p>No reports have been collected yet. Your application is being monitored for security violations and deprecated API usage.</p>
+                <button onclick="generateTestReports()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: var(--primary-color); color: white; border: none; border-radius: 0.5rem; cursor: pointer;">
+                    <i class="fas fa-flask"></i> Generate Test Reports
+                </button>
+            </div>
+
+            <div id="pagination" class="pagination" style="display: none;">
+                <button id="prevPage" onclick="changePage(-1)">
+                    <i class="fas fa-chevron-left"></i> Previous
+                </button>
+                <span id="pageInfo">Page 1 of 1</span>
+                <button id="nextPage" onclick="changePage(1)">
+                    Next <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>&copy; 2025 AI Job Matcher - Reporting API Dashboard</p>
+        <p>Monitor your application's security and performance in real-time</p>
+    </div>
+
+    <script>
+        let currentPage = 0;
+        let totalPages = 1;
+        let currentReports = [];
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            loadReports();
+            
+            // Set up auto-refresh every 30 seconds
+            setInterval(refreshReports, 30000);
+            
+            // Set up filter event listeners
+            document.getElementById('reportTypeFilter').addEventListener('change', loadReports);
+            document.getElementById('reportLimit').addEventListener('change', loadReports);
+        });
+
+        async function loadReports() {
+            showLoading();
+            
+            try {
+                const typeFilter = document.getElementById('reportTypeFilter').value;
+                const limit = document.getElementById('reportLimit').value;
+                const offset = currentPage * parseInt(limit);
+                
+                const params = new URLSearchParams({
+                    limit: limit,
+                    offset: offset.toString()
+                });
+                
+                if (typeFilter) {
+                    params.append('type', typeFilter);
+                }
+                
+                const response = await fetch(`/api/reports?${params}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                displayReports(data);
+                updateStatistics(data);
+                hideLoading();
+                updateLastUpdated();
+                
+            } catch (error) {
+                console.error('Error loading reports:', error);
+                showError(`Failed to load reports: ${error.message}`);
+                hideLoading();
+            }
+        }
+
+        function displayReports(data) {
+            const container = document.getElementById('reportsContainer');
+            const emptyState = document.getElementById('emptyState');
+            const pagination = document.getElementById('pagination');
+            
+            currentReports = data.reports || [];
+            
+            if (currentReports.length === 0) {
+                container.innerHTML = '';
+                emptyState.style.display = 'block';
+                pagination.style.display = 'none';
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+            
+            container.innerHTML = currentReports.map(report => createReportCard(report)).join('');
+            
+            // Update pagination
+            if (data.pagination) {
+                updatePagination(data.pagination);
+                pagination.style.display = 'flex';
+            } else {
+                pagination.style.display = 'none';
+            }
+        }
+
+        function createReportCard(report) {
+            const timeAgo = getTimeAgo(report.receivedAt);
+            const reportDetails = JSON.stringify(report.body, null, 2);
+            
+            return `
+                <div class="report-card">
+                    <div class="report-header">
+                        <span class="report-type ${report.type}">${report.type}</span>
+                        <span class="report-time">${timeAgo}</span>
+                    </div>
+                    
+                    <div class="report-url">${report.url}</div>
+                    
+                    <div class="report-summary">
+                        ${getReportSummary(report)}
+                    </div>
+                    
+                    <button class="report-toggle" onclick="toggleReportDetails('${report.id}')">
+                        <i class="fas fa-chevron-down"></i> Show Details
+                    </button>
+                    
+                    <div id="details-${report.id}" class="report-details" style="display: none; margin-top: 1rem;">
+                        <pre>${reportDetails}</pre>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getReportSummary(report) {
+            switch (report.type) {
+                case 'csp-violation':
+                    return `<strong>CSP Violation:</strong> ${report.body.effectiveDirective} blocked ${report.body.blockedURL}`;
+                case 'coep':
+                    return `<strong>COEP Violation:</strong> ${report.body.type} for ${report.body.blockedURL}`;
+                case 'coop':
+                    return `<strong>COOP Violation:</strong> ${report.body.disposition} policy violation`;
+                case 'document-policy-violation':
+                    return `<strong>Document Policy:</strong> ${report.body.message}`;
+                case 'deprecation':
+                    return `<strong>Deprecated API:</strong> ${report.body.id} - ${report.body.message}`;
+                case 'intervention':
+                    return `<strong>Browser Intervention:</strong> ${report.body.message}`;
+                default:
+                    return `<strong>${report.type}:</strong> Report received`;
+            }
+        }
+
+        function toggleReportDetails(reportId) {
+            const detailsElement = document.getElementById(`details-${reportId}`);
+            const isVisible = detailsElement.style.display !== 'none';
+            
+            detailsElement.style.display = isVisible ? 'none' : 'block';
+            
+            const button = detailsElement.previousElementSibling;
+            const icon = button.querySelector('i');
+            icon.className = isVisible ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+            button.innerHTML = isVisible ? 
+                '<i class="fas fa-chevron-down"></i> Show Details' : 
+                '<i class="fas fa-chevron-up"></i> Hide Details';
+        }
+
+        function updateStatistics(data) {
+            if (data.stats) {
+                document.getElementById('totalReports').textContent = data.stats.totalReports || 0;
+                
+                // Calculate security issues and deprecation warnings
+                const byType = data.stats.reportsByType || {};
+                const securityIssues = (byType['csp-violation'] || 0) + (byType['coep'] || 0) + (byType['coop'] || 0);
+                document.getElementById('securityIssues').textContent = securityIssues;
+                document.getElementById('deprecationWarnings').textContent = byType['deprecation'] || 0;
+            }
+            
+            // Load dashboard summary for more detailed stats
+            loadDashboardSummary();
+        }
+
+        async function loadDashboardSummary() {
+            try {
+                const response = await fetch('/api/reports-dashboard');
+                const data = await response.json();
+                
+                if (data.success && data.summary) {
+                    document.getElementById('totalReports').textContent = data.summary.total;
+                    document.getElementById('recentReports').textContent = data.summary.last24Hours;
+                    
+                    const securityIssues = (data.summary.byType['csp-violation'] || 0) + 
+                                         (data.summary.byType['coep'] || 0) + 
+                                         (data.summary.byType['coop'] || 0);
+                    document.getElementById('securityIssues').textContent = securityIssues;
+                    document.getElementById('deprecationWarnings').textContent = data.summary.byType['deprecation'] || 0;
+                    
+                    // Update status banner based on recent activity
+                    updateStatusBanner(data.summary);
+                }
+            } catch (error) {
+                console.error('Error loading dashboard summary:', error);
+                updateStatusBanner(null, true);
+            }
+        }
+
+        function updateStatusBanner(summary, hasError = false) {
+            const banner = document.getElementById('statusBanner');
+            
+            if (hasError) {
+                banner.className = 'status-banner error';
+                banner.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <span>Error connecting to reporting system</span>';
+                return;
+            }
+            
+            if (!summary) return;
+            
+            if (summary.last24Hours > 10) {
+                banner.className = 'status-banner warning';
+                banner.innerHTML = `<i class="fas fa-exclamation-triangle"></i> <span>High report activity: ${summary.last24Hours} reports in the last 24 hours</span>`;
+            } else if (summary.last24Hours > 0) {
+                banner.className = 'status-banner';
+                banner.innerHTML = `<i class="fas fa-info-circle"></i> <span>${summary.last24Hours} reports received in the last 24 hours</span>`;
+            } else {
+                banner.className = 'status-banner';
+                banner.innerHTML = '<i class="fas fa-check-circle"></i> <span>Reporting system is active - no recent issues detected</span>';
+            }
+        }
+
+        function updatePagination(pagination) {
+            const prevButton = document.getElementById('prevPage');
+            const nextButton = document.getElementById('nextPage');
+            const pageInfo = document.getElementById('pageInfo');
+            
+            const currentPageNum = Math.floor(pagination.offset / pagination.limit) + 1;
+            const totalPages = Math.ceil(pagination.total / pagination.limit);
+            
+            prevButton.disabled = pagination.offset === 0;
+            nextButton.disabled = !pagination.hasMore;
+            
+            pageInfo.textContent = `Page ${currentPageNum} of ${totalPages} (${pagination.total} reports)`;
+        }
+
+        function changePage(direction) {
+            const limit = parseInt(document.getElementById('reportLimit').value);
+            currentPage = Math.max(0, currentPage + direction);
+            loadReports();
+        }
+
+        function refreshReports() {
+            currentPage = 0;
+            loadReports();
+        }
+
+        function generateTestReports() {
+            // Open the test reports page in a new tab
+            window.open('/api/test-reports', '_blank');
+            
+            // Show feedback
+            showNotification('Test reports page opened. Reports will appear here shortly.', 'info');
+            
+            // Refresh reports after a delay to show the new test reports
+            setTimeout(() => {
+                refreshReports();
+            }, 3000);
+        }
+
+        function exportReports() {
+            if (currentReports.length === 0) {
+                showNotification('No reports to export', 'warning');
+                return;
+            }
+            
+            // Convert reports to CSV
+            const csvData = convertReportsToCSV(currentReports);
+            downloadCSV(csvData, 'reports-export.csv');
+            
+            showNotification('Reports exported successfully', 'success');
+        }
+
+        function convertReportsToCSV(reports) {
+            const headers = ['Type', 'URL', 'Received At', 'User Agent', 'Body'];
+            const rows = reports.map(report => [
+                report.type,
+                report.url,
+                report.receivedAt,
+                report.user_agent,
+                JSON.stringify(report.body)
+            ]);
+            
+            const csvContent = [headers, ...rows]
+                .map(row => row.map(field => `"${field}"`).join(','))
+                .join('\n');
+            
+            return csvContent;
+        }
+
+        function downloadCSV(csvData, filename) {
+            const blob = new Blob([csvData], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+
+        function updateLastUpdated() {
+            const lastUpdated = document.getElementById('lastUpdated');
+            lastUpdated.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+        }
+
+        function showLoading() {
+            document.getElementById('loadingIndicator').style.display = 'block';
+            document.getElementById('reportsContainer').style.display = 'none';
+            document.getElementById('errorContainer').style.display = 'none';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingIndicator').style.display = 'none';
+            document.getElementById('reportsContainer').style.display = 'block';
+        }
+
+        function showError(message) {
+            const errorContainer = document.getElementById('errorContainer');
+            errorContainer.querySelector('span').textContent = message;
+            errorContainer.style.display = 'flex';
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${type === 'success' ? '#10b981' : type === 'warning' ? '#f59e0b' : type === 'error' ? '#ef4444' : '#4f46e5'};
+                color: white;
+                padding: 12px 16px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                z-index: 10001;
+                font-family: Inter, sans-serif;
+                font-size: 14px;
+                font-weight: 500;
+                max-width: 300px;
+            `;
+            notification.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'warning' ? 'exclamation-triangle' : type === 'error' ? 'times-circle' : 'info-circle'}"></i> ${message}`;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+
+        function getTimeAgo(timestamp) {
+            const now = new Date();
+            const time = new Date(timestamp);
+            const diffInSeconds = Math.floor((now - time) / 1000);
+            
+            if (diffInSeconds < 60) return `${diffInSeconds}s ago`;
+            if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+            if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+            return `${Math.floor(diffInSeconds / 86400)}d ago`;
+        }
+    </script>
+</body>
+</html>
