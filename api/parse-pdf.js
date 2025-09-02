@@ -1,13 +1,12 @@
-// api/parse-pdf.js
+// Enhanced parse-pdf.js with comprehensive debugging
 import multer from "multer";
 import PDFParser from 'pdf2json';
 
-// Configure multer for file uploads
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: {
-        fileSize: 5 * 1024 * 1024, // 5MB limit
-        files: 1 // Only allow 1 file
+        fileSize: 5 * 1024 * 1024,
+        files: 1
     },
     fileFilter: (req, file, cb) => {
         const allowedMimeTypes = [
@@ -25,34 +24,26 @@ const upload = multer({
     }
 });
 
-// Vercel serverless function handler
 export default async function handler(req, res) {
-    // Enable CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    // Handle preflight requests
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
 
-    // Only allow POST requests
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
     try {
-        // Use multer to handle file upload
         const uploadMiddleware = upload.single('resume');
         
         await new Promise((resolve, reject) => {
             uploadMiddleware(req, res, (err) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve();
-                }
+                if (err) reject(err);
+                else resolve();
             });
         });
 
@@ -64,22 +55,23 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'File must be a PDF' });
         }
 
-        console.log(`Parsing PDF file: ${req.file.originalname} (${req.file.size} bytes)`);
+        console.log(`🔍 PRODUCTION DEBUG: Parsing PDF file: ${req.file.originalname} (${req.file.size} bytes)`);
+        console.log(`🔍 PRODUCTION DEBUG: Buffer length: ${req.file.buffer.length}`);
+        console.log(`🔍 PRODUCTION DEBUG: First 100 bytes: ${req.file.buffer.slice(0, 100).toString('hex')}`);
         
-        // Enhanced PDF parsing with better error handling
         const pdfParser = new PDFParser();
         
         const parsePDF = () => {
             return new Promise((resolve, reject) => {
                 let hasResolved = false;
                 
-                // Set timeout for PDF parsing
                 const parseTimeout = setTimeout(() => {
                     if (!hasResolved) {
                         hasResolved = true;
+                        console.log('❌ PRODUCTION DEBUG: PDF parsing timeout');
                         reject(new Error('PDF parsing timeout'));
                     }
-                }, 45000); // 45 second timeout for PDF parsing
+                }, 45000);
                 
                 pdfParser.on('pdfParser_dataReady', (pdfData) => {
                     if (hasResolved) return;
@@ -87,64 +79,77 @@ export default async function handler(req, res) {
                     clearTimeout(parseTimeout);
                     
                     try {
-                        let fullText = '';
-                        let totalTextLength = 0;
+                        console.log(`🔍 PRODUCTION DEBUG: PDF parsed successfully`);
+                        console.log(`🔍 PRODUCTION DEBUG: Pages found: ${pdfData.Pages ? pdfData.Pages.length : 0}`);
                         
                         if (!pdfData.Pages || pdfData.Pages.length === 0) {
+                            console.log('❌ PRODUCTION DEBUG: No pages found in PDF');
                             throw new Error('PDF appears to be empty or corrupted');
                         }
                         
-                        // Extract text from all pages with better handling
+                        let fullText = '';
+                        let totalTextLength = 0;
+                        let extractedChunks = [];
+                        
                         pdfData.Pages.forEach((page, pageIndex) => {
-                            if (!page.Texts) return;
+                            console.log(`🔍 PRODUCTION DEBUG: Processing page ${pageIndex + 1}`);
+                            console.log(`🔍 PRODUCTION DEBUG: Page texts count: ${page.Texts ? page.Texts.length : 0}`);
                             
-                            page.Texts.forEach(text => {
+                            if (!page.Texts) {
+                                console.log(`⚠️ PRODUCTION DEBUG: No texts found on page ${pageIndex + 1}`);
+                                return;
+                            }
+                            
+                            page.Texts.forEach((text, textIndex) => {
                                 try {
                                     if (text.R && text.R[0] && text.R[0].T) {
                                         let decodedText = text.R[0].T;
+                                        console.log(`🔍 PRODUCTION DEBUG: Raw text ${textIndex}: "${decodedText.substring(0, 50)}..."`);
                                         
-                                        // Try to decode URI component, but handle errors gracefully
                                         try {
                                             decodedText = decodeURIComponent(decodedText);
                                         } catch (decodeError) {
-                                            // If decoding fails, use the raw text
-                                            console.warn(`Warning: Could not decode text "${decodedText}", using raw text`);
+                                            console.warn(`⚠️ PRODUCTION DEBUG: Decode failed for text: "${decodedText}", using raw`);
                                         }
                                         
-                                        // Clean up the text
                                         decodedText = decodedText
-                                            .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-                                            .replace(/\n+/g, ' ') // Replace newlines with spaces
+                                            .replace(/\s+/g, ' ')
+                                            .replace(/\n+/g, ' ')
                                             .trim();
                                         
                                         if (decodedText.length > 0) {
                                             fullText += decodedText + ' ';
                                             totalTextLength += decodedText.length;
+                                            extractedChunks.push(decodedText);
                                         }
                                     }
                                 } catch (textError) {
-                                    // Skip problematic text but continue processing
-                                    console.warn(`Warning: Could not process text on page ${pageIndex + 1}:`, textError.message);
+                                    console.warn(`⚠️ PRODUCTION DEBUG: Error processing text on page ${pageIndex + 1}:`, textError.message);
                                 }
                             });
                             fullText += '\n';
                         });
                         
+                        console.log(`🔍 PRODUCTION DEBUG: Total text extracted: ${totalTextLength} characters`);
+                        console.log(`🔍 PRODUCTION DEBUG: Text chunks extracted: ${extractedChunks.length}`);
+                        console.log(`🔍 PRODUCTION DEBUG: First 200 chars: "${fullText.substring(0, 200)}"`);
+                        console.log(`🔍 PRODUCTION DEBUG: Last 200 chars: "${fullText.substring(Math.max(0, fullText.length - 200))}"`);
+                        
                         if (totalTextLength < 50) {
+                            console.log(`❌ PRODUCTION DEBUG: Very little text extracted (${totalTextLength} chars)`);
                             throw new Error('PDF contains very little extractable text. Please ensure your PDF contains readable text (not just images).');
                         }
                         
-                        // Clean up the final text
                         const cleanedText = fullText
-                            .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-                            .replace(/\n\s*\n/g, '\n') // Replace multiple newlines with single newline
+                            .replace(/\s+/g, ' ')
+                            .replace(/\n\s*\n/g, '\n')
                             .trim();
                         
-                        console.log(`PDF parsed successfully: ${pdfData.Pages.length} pages, ${totalTextLength} characters extracted`);
-                        console.log(`Cleaned text preview: "${cleanedText.substring(0, 200)}..."`);
+                        console.log(`✅ PRODUCTION DEBUG: Final cleaned text: ${cleanedText.length} characters`);
                         resolve(cleanedText);
                         
                     } catch (extractError) {
+                        console.log(`❌ PRODUCTION DEBUG: Text extraction failed: ${extractError.message}`);
                         reject(new Error(`PDF text extraction failed: ${extractError.message}`));
                     }
                 });
@@ -153,16 +158,18 @@ export default async function handler(req, res) {
                     if (hasResolved) return;
                     hasResolved = true;
                     clearTimeout(parseTimeout);
+                    console.log(`❌ PRODUCTION DEBUG: PDF parser error: ${error.parserError || error.message}`);
                     reject(new Error(`PDF parsing error: ${error.parserError || error.message || 'Unknown PDF error'}`));
                 });
                 
-                // Parse the PDF buffer
                 try {
+                    console.log(`🔍 PRODUCTION DEBUG: Starting PDF buffer parsing...`);
                     pdfParser.parseBuffer(req.file.buffer);
                 } catch (parseError) {
                     if (!hasResolved) {
                         hasResolved = true;
                         clearTimeout(parseTimeout);
+                        console.log(`❌ PRODUCTION DEBUG: Failed to start parsing: ${parseError.message}`);
                         reject(new Error(`Failed to start PDF parsing: ${parseError.message}`));
                     }
                 }
@@ -170,10 +177,21 @@ export default async function handler(req, res) {
         };
         
         const fullText = await parsePDF();
-        res.json({ text: fullText });
+        
+        // Return both the text and debug info
+        res.json({ 
+            text: fullText,
+            debugInfo: {
+                originalSize: req.file.size,
+                extractedLength: fullText.length,
+                fileName: req.file.originalname,
+                timestamp: new Date().toISOString()
+            }
+        });
         
     } catch (error) {
-        console.error('PDF parsing error:', error);
+        console.error('❌ PRODUCTION DEBUG: PDF parsing error:', error.message);
+        console.error('❌ PRODUCTION DEBUG: Full error:', error);
         
         let userMessage = 'Failed to parse PDF. ';
         if (error.message.includes('timeout')) {
@@ -188,4 +206,4 @@ export default async function handler(req, res) {
         
         res.status(500).json({ error: userMessage });
     }
-} 
+}
