@@ -165,14 +165,20 @@ app.get('/api/health', (req, res) => {
 
 // API routes for local development
 import searchJobsHandler from './api/search-jobs.js';
+import searchJobsModularHandler from './api/search-jobs-modular.js';
 import analyzeResumeHandler from './api/analyze-resume.js';
 import parsePdfHandler from './api/parse-pdf.js';
 import reportsHandler from './api/report.js';
 
 // Main API routes
 app.post('/api/search-jobs', searchJobsHandler);
+app.post('/api/search-jobs-modular', searchJobsModularHandler);
 app.post('/api/analyze-resume', analyzeResumeHandler);
 app.post('/api/parse-pdf', parsePdfHandler);
+
+// API status endpoints (modular)
+app.get('/api-status', searchJobsModularHandler);
+app.post('/reset-api-status', searchJobsModularHandler);
 
 // Reporting API routes
 app.use('/api/reports', reportsHandler);
