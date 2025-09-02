@@ -20,7 +20,8 @@ export class ApiManager {
             themuse: new TheMuseApi(),
             reed: new ReedApi(),
             jsearch: new RapidApiJSearch(),
-            jobs: new RapidApiJobs()
+            jobs: new RapidApiJobs(),
+            rapidapi: new RapidApiJSearch() // Alias for backward compatibility
         };
 
         this.exhaustedApis = new Set();

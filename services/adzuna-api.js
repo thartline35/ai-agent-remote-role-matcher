@@ -20,7 +20,7 @@ export class AdzunaApi extends BaseApi {
     async searchJobs(query, filters) {
         const requestConfig = {
             method: 'GET',
-            url: `${this.config.baseUrl}/jobs/us/search/1`,
+            url: `${this.config.baseUrl}/api/jobs/us/search/1`,
             params: {
                 app_id: this.config.appId,
                 app_key: this.config.apiKey,
