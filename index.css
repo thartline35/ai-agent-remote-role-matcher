@@ -2217,6 +2217,98 @@
   }
   
   /* ===========================================
+     Scraping Status Styles
+     =========================================== */
+  .scraping-status {
+    background: var(--neutral-50);
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-4);
+    margin: var(--spacing-4) 0;
+  }
+  
+  .status-indicators {
+    display: flex;
+    gap: var(--spacing-6);
+    align-items: center;
+  }
+  
+  .status-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    font-size: var(--font-size-sm);
+    color: var(--neutral-600);
+  }
+  
+  .status-item i {
+    color: var(--primary-500);
+  }
+  
+  .user-messages {
+    margin: var(--spacing-4) 0;
+  }
+  
+  .message {
+    margin: var(--spacing-3) 0;
+    padding: var(--spacing-4);
+    border-radius: var(--border-radius-lg);
+    border-left: 4px solid;
+    animation: slideIn 0.3s ease-out;
+  }
+  
+  .message-warning {
+    background-color: var(--warning-50);
+    border-left-color: var(--warning-500);
+    color: var(--warning-700);
+  }
+  
+  .message-info {
+    background-color: var(--info-50);
+    border-left-color: var(--info-500);
+    color: var(--info-700);
+  }
+  
+  .message-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: var(--spacing-2);
+  }
+  
+  .message-icon {
+    font-size: var(--font-size-lg);
+    margin-right: var(--spacing-2);
+  }
+  
+  .message-title {
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-base);
+  }
+  
+  .message-body p {
+    margin: var(--spacing-1) 0;
+    font-size: var(--font-size-sm);
+  }
+  
+  .message-action {
+    font-style: italic;
+    font-size: var(--font-size-xs);
+    margin-top: var(--spacing-2);
+    opacity: 0.8;
+  }
+  
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  /* ===========================================
      Print Styles
      =========================================== */
   @media print {

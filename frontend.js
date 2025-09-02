@@ -65,6 +65,14 @@ class AIJobMatcher {
         this.clearFilters = document.getElementById('clear-filters');
         this.jobsGrid = document.getElementById('jobs-grid');
         this.loadMore = document.getElementById('load-more');
+        
+        // Scraping status elements
+        this.scrapingStatus = document.getElementById('scraping-status');
+        this.scrapingSources = document.getElementById('scraping-sources');
+        this.scrapingCount = document.getElementById('scraping-count');
+        this.apiHealth = document.getElementById('api-health');
+        this.scraperHealth = document.getElementById('scraper-health');
+        this.userMessages = document.getElementById('user-messages');
 
         // Error elements
         this.errorSection = document.getElementById('error-section');
@@ -401,6 +409,7 @@ class AIJobMatcher {
 
             this.showLoading(true, 'Initializing job search...');
             this.hideError();
+            this.clearUserMessages();
     
             const filters = this.getSearchFilters(); // FIXED: This method is now properly defined below
     
@@ -412,7 +421,7 @@ class AIJobMatcher {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout
             
-            const response = await fetch('/api/search-jobs', {
+            const response = await fetch('/api/search-jobs-modular', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -560,6 +569,26 @@ class AIJobMatcher {
                 await this.handleSearchComplete(data);
                 break;
 
+            case 'user_message':
+                console.log('💬 User message:', data.title);
+                this.displayUserMessage(data);
+                break;
+
+            case 'scraper_start':
+                console.log('🕷️ Scraper started:', data.scraper);
+                this.loadingMessage.textContent = data.message;
+                break;
+
+            case 'scraper_complete':
+                console.log('🕷️ Scraper completed:', data.scraper, data.count, 'jobs');
+                this.loadingMessage.textContent = data.message;
+                break;
+
+            case 'scraper_error':
+                console.log('🕷️ Scraper error:', data.scraper, data.error);
+                this.loadingMessage.textContent = data.message;
+                break;
+
             case 'error':
                 console.error('❌ Streaming error:', data.error);
                 this.showError(data.error);
@@ -660,6 +689,18 @@ class AIJobMatcher {
         
         this.showLoading(false);
         this.updateProgressBar(100);
+        
+        // Update scraping status
+        if (data.apiStatus || data.scraperStatus) {
+            this.updateScrapingStatus(data.apiStatus, data.scraperStatus);
+        }
+        
+        // Display user messages
+        if (data.userMessages && data.userMessages.length > 0) {
+            data.userMessages.forEach(message => {
+                this.displayUserMessage(message);
+            });
+        }
         
         // Clear temporary results
         this.tempJobResults = [];
@@ -1389,6 +1430,74 @@ class AIJobMatcher {
         const count = this.savedJobs.length;
         document.getElementById('saved-count').textContent = count;
         document.getElementById('saved-count-saved').textContent = count;
+    }
+
+    // Scraping status methods
+    updateScrapingStatus(apiStatus, scraperStatus) {
+        if (!this.scrapingStatus) return;
+        
+        // Show scraping status if we have data
+        if (apiStatus || scraperStatus) {
+            this.scrapingStatus.style.display = 'block';
+            
+            // Update API health
+            if (apiStatus && this.apiHealth) {
+                this.apiHealth.textContent = `${apiStatus.systemHealth.healthyPercentage}%`;
+            }
+            
+            // Update scraper health
+            if (scraperStatus && this.scraperHealth) {
+                this.scraperHealth.textContent = `${scraperStatus.healthPercentage}%`;
+            }
+            
+            // Update source counts
+            if (this.scrapingSources && this.scrapingCount) {
+                const apiCount = apiStatus ? apiStatus.systemHealth.healthyApis : 0;
+                const scraperCount = scraperStatus ? scraperStatus.availableScrapers : 0;
+                this.scrapingSources.textContent = apiCount;
+                this.scrapingCount.textContent = scraperCount;
+            }
+        } else {
+            this.scrapingStatus.style.display = 'none';
+        }
+    }
+
+    displayUserMessage(message) {
+        if (!this.userMessages) return;
+        
+        const messageElement = document.createElement('div');
+        messageElement.className = `message message-${message.messageType}`;
+        
+        const icon = message.messageType === 'warning' ? '⚠️' : 'ℹ️';
+        const actionText = message.action === 'try_again_later' 
+            ? 'Try again later for better results' 
+            : 'Continue with current results';
+        
+        messageElement.innerHTML = `
+            <div class="message-header">
+                <span class="message-icon">${icon}</span>
+                <span class="message-title">${message.title}</span>
+            </div>
+            <div class="message-body">
+                <p>${message.message}</p>
+                <p class="message-action">💡 ${actionText}</p>
+            </div>
+        `;
+        
+        this.userMessages.appendChild(messageElement);
+        
+        // Auto-remove after 10 seconds
+        setTimeout(() => {
+            if (messageElement.parentNode) {
+                messageElement.parentNode.removeChild(messageElement);
+            }
+        }, 10000);
+    }
+
+    clearUserMessages() {
+        if (this.userMessages) {
+            this.userMessages.innerHTML = '';
+        }
     }
 }
 

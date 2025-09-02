@@ -2,6 +2,7 @@
 
 import { jobSearchService } from '../services/job-search-service.js';
 import { apiManager } from '../services/api-manager.js';
+import { scraperManager } from '../services/scraper-manager.js';
 
 /**
  * Modular job search endpoint
@@ -20,13 +21,19 @@ export default async function handler(req, res) {
 
     // Handle different request methods
     if (req.method === 'GET' && req.url?.includes('/api-status')) {
-        const statusReport = apiManager.getApiStatusReport();
-        return res.status(200).json(statusReport);
+        const apiStatus = apiManager.getApiStatusReport();
+        const scraperStatus = scraperManager.getStatusReport();
+        return res.status(200).json({
+            apiStatus,
+            scraperStatus,
+            timestamp: new Date().toISOString()
+        });
     }
     
     if (req.method === 'POST' && req.url?.includes('/reset-api-status')) {
         apiManager.manualResetApiStatus();
-        return res.status(200).json({ message: 'API status reset successfully' });
+        scraperManager.resetScraperStatus();
+        return res.status(200).json({ message: 'API and scraper status reset successfully' });
     }
     
     if (req.method !== 'POST') {
@@ -121,7 +128,22 @@ export default async function handler(req, res) {
         console.log(`Total search time: ${totalSearchTime}s`);
         console.log(`Jobs found: ${totalJobsFound}`);
 
-        const apiStatusReport = apiManager.getApiStatusReport();
+        // Stream user messages if any
+        if (result.userMessages && result.userMessages.length > 0) {
+            console.log(`📢 Streaming ${result.userMessages.length} user messages`);
+            result.userMessages.forEach(message => {
+                const messageData = {
+                    type: 'user_message',
+                    messageType: message.type,
+                    title: message.title,
+                    message: message.message,
+                    apiName: message.apiName,
+                    action: message.action,
+                    timestamp: new Date().toISOString()
+                };
+                res.write(`data: ${JSON.stringify(messageData)}\n\n`);
+            });
+        }
         
         const finalData = {
             type: 'search_complete',
@@ -129,7 +151,9 @@ export default async function handler(req, res) {
             totalJobs: totalJobsFound,
             searchTimeSeconds: parseFloat(totalSearchTime),
             message: `Found ${totalJobsFound} remote jobs matching your profile`,
-            apiStatus: apiStatusReport,
+            userMessages: result.userMessages || [],
+            apiStatus: result.apiStatus,
+            scraperStatus: result.scraperStatus,
             timestamp: new Date().toISOString()
         };
 
@@ -153,11 +177,32 @@ export default async function handler(req, res) {
         }
 
         if (!res.headersSent) {
-            res.write(`data: ${JSON.stringify({
+            // Stream user messages if available in error
+            if (error.userMessages && error.userMessages.length > 0) {
+                console.log(`📢 Streaming ${error.userMessages.length} user messages from error`);
+                error.userMessages.forEach(message => {
+                    const messageData = {
+                        type: 'user_message',
+                        messageType: message.type,
+                        title: message.title,
+                        message: message.message,
+                        apiName: message.apiName,
+                        action: message.action,
+                        timestamp: new Date().toISOString()
+                    };
+                    res.write(`data: ${JSON.stringify(messageData)}\n\n`);
+                });
+            }
+
+            const errorData = {
                 type: 'error',
                 error: userFriendlyMessage,
+                userMessages: error.userMessages || [],
+                apiStatus: error.apiStatus || null,
                 timestamp: new Date().toISOString()
-            })}\n\n`);
+            };
+
+            res.write(`data: ${JSON.stringify(errorData)}\n\n`);
             res.end();
         }
     }

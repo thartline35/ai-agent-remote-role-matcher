@@ -1,6 +1,7 @@
 // services/job-search-service.js - Modular job search service
 
 import { apiManager } from './api-manager.js';
+import { scraperManager } from './scraper-manager.js';
 import { apiConfig } from '../config/api-config.js';
 import OpenAI from 'openai';
 
@@ -342,7 +343,85 @@ export class JobSearchService {
     }
 
     /**
-     * Search for jobs using all available APIs
+     * Get user-friendly messages for API status
+     * @param {Object} apiStatus - API status report
+     * @returns {Array} Array of user-friendly messages
+     */
+    getUserFriendlyMessages(apiStatus) {
+        const messages = [];
+        
+        // Check for exhausted APIs
+        if (apiStatus.exhaustedApis && apiStatus.exhaustedApis.length > 0) {
+            apiStatus.exhaustedApis.forEach(apiName => {
+                const apiDisplayName = this.getApiDisplayName(apiName);
+                messages.push({
+                    type: 'warning',
+                    title: `${apiDisplayName} Temporarily Unavailable`,
+                    message: `${apiDisplayName} has reached its quota limit and is temporarily unavailable. Please try again later or consider upgrading your plan for more requests.`,
+                    apiName: apiName,
+                    action: 'try_again_later'
+                });
+            });
+        }
+        
+        // Check for suspicious APIs (multiple empty responses)
+        if (apiStatus.suspiciousApis && Object.keys(apiStatus.suspiciousApis).length > 0) {
+            Object.keys(apiStatus.suspiciousApis).forEach(apiName => {
+                const apiDisplayName = this.getApiDisplayName(apiName);
+                const count = apiStatus.suspiciousApis[apiName];
+                messages.push({
+                    type: 'info',
+                    title: `${apiDisplayName} Limited Results`,
+                    message: `${apiDisplayName} is returning limited results. This may be due to high demand or temporary issues.`,
+                    apiName: apiName,
+                    action: 'continue_search'
+                });
+            });
+        }
+        
+        // Add general system health message
+        if (apiStatus.systemHealth) {
+            const healthPercentage = apiStatus.systemHealth.healthyPercentage;
+            if (healthPercentage < 50) {
+                messages.push({
+                    type: 'warning',
+                    title: 'Limited Job Sources Available',
+                    message: `Only ${healthPercentage}% of job sources are currently available. Results may be limited. Please try again later for more comprehensive results.`,
+                    action: 'try_again_later'
+                });
+            } else if (healthPercentage < 80) {
+                messages.push({
+                    type: 'info',
+                    title: 'Some Job Sources Unavailable',
+                    message: `${healthPercentage}% of job sources are available. You're getting results from the working sources.`,
+                    action: 'continue_search'
+                });
+            }
+        }
+        
+        return messages;
+    }
+
+    /**
+     * Get display name for API
+     * @param {string} apiName - Internal API name
+     * @returns {string} Display name
+     */
+    getApiDisplayName(apiName) {
+        const displayNames = {
+            'theirstack': 'Theirstack',
+            'adzuna': 'Adzuna',
+            'themuse': 'TheMuse',
+            'reed': 'Reed',
+            'jsearch': 'JSearch',
+            'jobs': 'Jobs API',
+            'rapidapi': 'RapidAPI'
+        };
+        return displayNames[apiName] || apiName;
+    }
+
+    /**
+     * Search for jobs using all available APIs and scrapers
      * @param {Object} analysis - Resume analysis
      * @param {Object} filters - Search filters
      * @param {Function} onJobFound - Callback for found jobs
@@ -468,11 +547,60 @@ export class JobSearchService {
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
         
+        // Add web scraping for additional results
+        console.log(`\n🕷️ === STARTING WEB SCRAPING ===`);
+        onProgress('Starting web scraping for additional results...', 90);
+        
+        try {
+            const scrapingResults = await scraperManager.searchJobs(
+                queries[0] || 'remote software engineer', 
+                filters, 
+                (progress) => {
+                    if (onProgress) {
+                        onProgress(progress.message, 90 + (progress.count || 0) * 2);
+                    }
+                }
+            );
+            
+            console.log(`🕷️ Scraping found ${scrapingResults.jobs.length} additional jobs`);
+            
+            // Add scraped jobs to the main results
+            scrapingResults.jobs.forEach(job => {
+                const key = `${job.title.toLowerCase().trim()}-${job.company.toLowerCase().trim()}`;
+                if (!processedJobKeys.has(key)) {
+                    processedJobKeys.add(key);
+                    allJobs.push(job);
+                    if (onJobFound) {
+                        onJobFound(job);
+                    }
+                }
+            });
+            
+            console.log(`🕷️ After scraping: ${allJobs.length} total jobs`);
+        } catch (error) {
+            console.error('❌ Web scraping failed:', error.message);
+            // Continue with API results even if scraping fails
+        }
+
         console.log(`\n🎯 === SEARCH COMPLETED ===`);
         console.log(`Total jobs found: ${allJobs.length}`);
         
+        // Get API status for user messages
+        const apiStatusReport = apiManager.getApiStatusReport();
+        const scraperStatusReport = scraperManager.getStatusReport();
+        const userMessages = this.getUserFriendlyMessages(apiStatusReport);
+        
+        // Add scraper messages
+        const scraperMessages = scraperManager.getUserFriendlyMessages();
+        userMessages.push(...scraperMessages);
+        
         if (allJobs.length === 0) {
-            throw new Error('No remote jobs found matching your profile. Try broadening your search criteria or updating your resume with more common industry terms.');
+            // If no jobs found, include user messages in the error
+            const errorMessage = 'No remote jobs found matching your profile. Try broadening your search criteria or updating your resume with more common industry terms.';
+            const error = new Error(errorMessage);
+            error.userMessages = userMessages;
+            error.apiStatus = apiStatusReport;
+            throw error;
         }
         
         // Sort by title for now (can be enhanced with AI matching later)
@@ -480,7 +608,10 @@ export class JobSearchService {
         
         return {
             allJobs: sortedJobs,
-            totalJobs: sortedJobs.length
+            totalJobs: sortedJobs.length,
+            userMessages: userMessages,
+            apiStatus: apiStatusReport,
+            scraperStatus: scraperStatusReport
         };
     }
 }

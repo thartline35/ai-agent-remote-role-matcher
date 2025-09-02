@@ -2,7 +2,7 @@
 
 ## Overview
 
-Your AI Agent Remote Role Matcher has been successfully restructured into a modular, easily debuggable architecture. Each API service is now separated into its own module with comprehensive error handling, logging, and status tracking.
+Your AI Agent Remote Role Matcher has been successfully restructured into a modular, easily debuggable architecture. Each API service is now separated into its own module with comprehensive error handling, logging, and status tracking. Additionally, the system now includes web scraping capabilities to provide more job results without relying on API quotas or tokens.
 
 ## Architecture Components
 
@@ -72,13 +72,30 @@ Each API has its own dedicated service module:
   - Real-time streaming results
   - Progress tracking
 
-### 6. Modular Endpoint (`api/search-jobs-modular.js`)
+### 6. Web Scraping System
+- **Base Scraper** (`services/base-scraper.js`): Common functionality for all scrapers
+- **Individual Scrapers** (`services/scrapers/`):
+  - `indeed-scraper.js` - Indeed job board scraper
+  - `jooble-scraper.js` - Jooble job aggregator scraper
+  - `ziprecruiter-scraper.js` - ZipRecruiter job board scraper
+  - `weworkremotely-scraper.js` - We Work Remotely remote jobs scraper
+  - `careerjet-scraper.js` - CareerJet job aggregator scraper
+- **Scraper Manager** (`services/scraper-manager.js`): Coordinates all scrapers
+- **Features**:
+  - No API quotas or tokens required
+  - Parallel scraping for faster results
+  - Automatic error handling and retry logic
+  - Duplicate job removal
+  - User-friendly status messages
+
+### 7. Modular Endpoint (`api/search-jobs-modular.js`)
 - **Purpose**: New modular job search endpoint
 - **Features**:
   - Server-sent events for real-time updates
   - Comprehensive error handling
   - API status reporting
   - Progress streaming
+  - Combined API and scraping results
 
 ## Key Benefits
 
@@ -99,6 +116,13 @@ Each API has its own dedicated service module:
 - Graceful fallback when APIs fail
 - Retry logic with exponential backoff
 - User-friendly error messages
+
+### 🕷️ **Web Scraping Advantages**
+- **No API Quotas**: Scraping doesn't consume API tokens or hit rate limits
+- **More Results**: Additional job sources beyond API limitations
+- **Cost Effective**: No subscription fees for scraping sources
+- **Reliable**: Works even when APIs are exhausted
+- **Comprehensive**: Covers major job boards and aggregators
 
 ### 🔄 **Maintainability**
 - Single responsibility principle
@@ -152,6 +176,15 @@ The system automatically tracks:
 - 🚫 **Exhausted APIs**: Quota exceeded or errors detected
 
 APIs are automatically reset every hour, or can be manually reset via the API.
+
+## Scraping Status Monitoring
+
+The web scraping system tracks:
+- ✅ **Available Scrapers**: Working normally
+- ❌ **Unavailable Scrapers**: Multiple failures detected
+- 🔄 **Auto-Recovery**: Scrapers are automatically re-enabled after errors
+
+Scrapers provide additional job results without consuming API quotas.
 
 ## Error Recovery
 

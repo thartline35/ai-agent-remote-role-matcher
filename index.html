@@ -25,7 +25,7 @@
             </div>
             
             <h1 class="hero-title">AI Job Matcher</h1>
-            <p class="hero-subtitle">Revolutionary AI-powered platform that analyzes your resume and finds perfect remote job matches in seconds</p>
+            <p class="hero-subtitle">Revolutionary AI-powered platform that analyzes your resume and finds perfect remote job matches from 12+ sources including advanced web scraping</p>
             
             <div class="hero-features">
                 <div class="feature-item">
@@ -58,6 +58,22 @@
                     </div>
                     <h3 class="feature-title">Real-Time Matching</h3>
                     <p class="feature-desc">Instant results with live progress tracking and detailed match percentages</p>
+                </div>
+                
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <i class="fas fa-spider"></i>
+                    </div>
+                    <h3 class="feature-title">Web Scraping Power</h3>
+                    <p class="feature-desc">Advanced web scraping from 5+ major job boards for comprehensive results without API limits</p>
+                </div>
+                
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <i class="fas fa-database"></i>
+                    </div>
+                    <h3 class="feature-title">12+ Job Sources</h3>
+                    <p class="feature-desc">Combines 7 APIs with 5 web scrapers for maximum job coverage and reliability</p>
                 </div>
             </div>
             
@@ -206,6 +222,19 @@
                         <div class="results-stats">
                             <span>Total Jobs: <span id="total-jobs">0</span></span>
                             <span>Average Match: <span id="match-percentage">0%</span></span>
+                            <span>Sources: <span id="scraping-sources">0</span> APIs + <span id="scraping-count">0</span> Scrapers</span>
+                        </div>
+                        <div class="scraping-status" id="scraping-status" style="display: none;">
+                            <div class="status-indicators">
+                                <div class="status-item">
+                                    <i class="fas fa-database"></i>
+                                    <span>APIs: <span id="api-health">0%</span></span>
+                                </div>
+                                <div class="status-item">
+                                    <i class="fas fa-spider"></i>
+                                    <span>Scrapers: <span id="scraper-health">0%</span></span>
+                                </div>
+                            </div>
                         </div>
                         <div class="filters-bar">
                             <div class="filter-chips" id="filter-chips"></div>
@@ -223,6 +252,7 @@
                             </button>
                         </div>
                     </div>
+                    <div class="user-messages" id="user-messages"></div>
                     <div class="jobs-grid" id="jobs-grid"></div>
                     <button class="load-more" id="load-more" style="display: none;">
                         <i class="fas fa-plus"></i>
@@ -258,7 +288,7 @@
 
             <!-- Footer -->
             <footer class="footer">
-                <p>&copy; 2025 AI Job Matcher. Powered by OpenAI GPT-4 & Multiple Job APIs</p>
+                <p>&copy; 2025 AI Job Matcher. Powered by OpenAI GPT-4, Multiple Job APIs & Web Scraping</p>
                 <p>Conceptualized, designed, engineered, tested, and deployed by Software/ML Engineer, Tammy Hartline</p>
             </footer>
         </div>
