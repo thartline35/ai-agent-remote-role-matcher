@@ -101,13 +101,30 @@ export default async function handler(req, res) {
                             page.Texts.forEach(text => {
                                 try {
                                     if (text.R && text.R[0] && text.R[0].T) {
-                                        const decodedText = decodeURIComponent(text.R[0].T);
-                                        fullText += decodedText + ' ';
-                                        totalTextLength += decodedText.length;
+                                        let decodedText = text.R[0].T;
+                                        
+                                        // Try to decode URI component, but handle errors gracefully
+                                        try {
+                                            decodedText = decodeURIComponent(decodedText);
+                                        } catch (decodeError) {
+                                            // If decoding fails, use the raw text
+                                            console.warn(`Warning: Could not decode text "${decodedText}", using raw text`);
+                                        }
+                                        
+                                        // Clean up the text
+                                        decodedText = decodedText
+                                            .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+                                            .replace(/\n+/g, ' ') // Replace newlines with spaces
+                                            .trim();
+                                        
+                                        if (decodedText.length > 0) {
+                                            fullText += decodedText + ' ';
+                                            totalTextLength += decodedText.length;
+                                        }
                                     }
-                                } catch (decodeError) {
+                                } catch (textError) {
                                     // Skip problematic text but continue processing
-                                    console.warn(`Warning: Could not decode text on page ${pageIndex + 1}`);
+                                    console.warn(`Warning: Could not process text on page ${pageIndex + 1}:`, textError.message);
                                 }
                             });
                             fullText += '\n';
@@ -117,8 +134,15 @@ export default async function handler(req, res) {
                             throw new Error('PDF contains very little extractable text. Please ensure your PDF contains readable text (not just images).');
                         }
                         
+                        // Clean up the final text
+                        const cleanedText = fullText
+                            .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+                            .replace(/\n\s*\n/g, '\n') // Replace multiple newlines with single newline
+                            .trim();
+                        
                         console.log(`PDF parsed successfully: ${pdfData.Pages.length} pages, ${totalTextLength} characters extracted`);
-                        resolve(fullText);
+                        console.log(`Cleaned text preview: "${cleanedText.substring(0, 200)}..."`);
+                        resolve(cleanedText);
                         
                     } catch (extractError) {
                         reject(new Error(`PDF text extraction failed: ${extractError.message}`));
