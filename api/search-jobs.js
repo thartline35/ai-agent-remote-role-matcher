@@ -3,9 +3,6 @@ import OpenAI from 'openai';
 import axios from 'axios';
 import dotenv from 'dotenv';
 
-// Export functions needed by other modules
-export { getApiKeyWithBackup, rotateToNextApiKey, makeApiCallWithExhaustionDetectionEnhanced };
-
 // Load environment variables
 dotenv.config({ path: './local.env' });
 
@@ -30,9 +27,7 @@ const apiStatus = {
     suspiciousApis: new Map(),
     lastResetTime: Date.now(),
     resetInterval: 1000 * 60 * 60, // Reset every hour
-    maxSuspiciousFailures: 3,
-    currentTokenIndex: {}, // Track which token is currently in use for each API
-    tokenRotationEnabled: true // Enable/disable token rotation feature
+    maxSuspiciousFailures: 3
 };
 
 function detectApiExhaustion(error, response, sourceName) {
@@ -129,140 +124,6 @@ function resetApiStatusIfNeeded() {
     return false;
 }
 
-// Helper function to get API key with backup support
-function getApiKeyWithBackup(sourceName) {
-    // Define backup keys configuration
-    const apiKeysConfig = {
-        'OpenAI': {
-            keys: [
-                process.env.OPENAI_API_KEY,
-                process.env.OPENAI_API_KEY_BACKUP_1,
-                process.env.OPENAI_API_KEY_BACKUP_2
-            ],
-            currentIndex: apiStatus.currentTokenIndex['OpenAI'] || 0
-        },
-        'Theirstack': {
-            keys: [
-                process.env.THEIRSTACK_API_KEY,
-                process.env.THEIRSTACK_API_KEY_BACKUP_1
-            ],
-            currentIndex: apiStatus.currentTokenIndex['Theirstack'] || 0
-        },
-        'Adzuna': {
-            // For APIs with multiple credentials, we store objects
-            keys: [
-                { appId: process.env.ADZUNA_APP_ID, apiKey: process.env.ADZUNA_API_KEY },
-                { appId: process.env.ADZUNA_APP_ID_BACKUP_1, apiKey: process.env.ADZUNA_API_KEY_BACKUP_1 }
-            ],
-            currentIndex: apiStatus.currentTokenIndex['Adzuna'] || 0
-        },
-        'TheMuse': {
-            keys: [
-                process.env.THEMUSE_API_KEY,
-                process.env.THEMUSE_API_KEY_BACKUP_1
-            ],
-            currentIndex: apiStatus.currentTokenIndex['TheMuse'] || 0
-        },
-        'Reed': {
-            keys: [
-                process.env.REED_API_KEY,
-                process.env.REED_API_KEY_BACKUP_1
-            ],
-            currentIndex: apiStatus.currentTokenIndex['Reed'] || 0
-        },
-        'RapidAPI': {
-            keys: [
-                process.env.RAPIDAPI_KEY,
-                process.env.RAPIDAPI_KEY_BACKUP_1
-            ],
-            currentIndex: apiStatus.currentTokenIndex['RapidAPI'] || 0
-        },
-        'JobsMulti': {
-            keys: [
-                process.env.JOBSMULTI_API_KEY,
-                process.env.JOBSMULTI_API_KEY_BACKUP_1
-            ],
-            currentIndex: apiStatus.currentTokenIndex['JobsMulti'] || 0
-        },
-        'Jobber': {
-            keys: [
-                process.env.JOBBER_API_KEY,
-                process.env.JOBBER_API_KEY_BACKUP_1
-            ],
-            currentIndex: apiStatus.currentTokenIndex['Jobber'] || 0
-        }
-    };
-    
-    // Get config for the requested source
-    let config;
-    
-    // Handle RapidAPI services that share the same key
-    if (sourceName === 'JSearch-RapidAPI' || sourceName === 'RapidAPI-Jobs') {
-        config = apiKeysConfig['RapidAPI'];
-    } else {
-        config = apiKeysConfig[sourceName];
-    }
-    
-    if (!config) {
-        console.log(`⚠️ No API key configuration found for ${sourceName}`);
-        return null;
-    }
-    
-    // Filter out undefined/null keys
-    const validKeys = config.keys.filter(key => {
-        if (key === null || key === undefined) return false;
-        if (typeof key === 'object') {
-            // For composite keys like Adzuna
-            return Object.values(key).every(val => val !== null && val !== undefined && val !== '');
-        }
-        return key !== '';
-    });
-    
-    if (validKeys.length === 0) {
-        console.log(`⚠️ No valid API keys found for ${sourceName}`);
-        return null;
-    }
-    
-    // Get current key based on the rotation index
-    const currentKey = validKeys[config.currentIndex % validKeys.length];
-    
-    // Store the current index for this API
-    apiStatus.currentTokenIndex[sourceName] = config.currentIndex;
-    
-    return {
-        key: currentKey,
-        index: config.currentIndex,
-        total: validKeys.length
-    };
-}
-
-// Function to rotate to the next API key when current one is exhausted
-function rotateToNextApiKey(sourceName) {
-    if (!apiStatus.tokenRotationEnabled) {
-        console.log(`🔄 Token rotation disabled for ${sourceName}`);
-        return false;
-    }
-    
-    // Initialize if not exists
-    if (apiStatus.currentTokenIndex[sourceName] === undefined) {
-        apiStatus.currentTokenIndex[sourceName] = 0;
-    }
-    
-    // Increment the index to use the next key
-    apiStatus.currentTokenIndex[sourceName]++;
-    
-    // Get the new key details
-    const keyInfo = getApiKeyWithBackup(sourceName);
-    
-    if (!keyInfo || !keyInfo.key) {
-        console.log(`⚠️ No more backup keys available for ${sourceName}`);
-        return false;
-    }
-    
-    console.log(`🔄 Rotated to backup key ${keyInfo.index + 1}/${keyInfo.total} for ${sourceName}`);
-    return true;
-}
-
 function checkApiKeyForSourceEnhanced(sourceName) {
     const checkId = `check-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     console.log(`\n🔑 [${checkId}] === CHECKING ${sourceName} ===`);
@@ -272,124 +133,64 @@ function checkApiKeyForSourceEnhanced(sourceName) {
     if (apiStatus.exhaustedApis.has(sourceName)) {
         const timeSinceReset = Math.round((Date.now() - apiStatus.lastResetTime) / 1000 / 60);
         const nextResetIn = Math.round((apiStatus.resetInterval / 1000 / 60) - timeSinceReset);
-        
-        // Try rotating to a backup key if available
-        if (rotateToNextApiKey(sourceName)) {
-            console.log(`🔄 [${checkId}] ${sourceName}: Trying backup API key`);
-            // Remove from exhausted list since we're trying a backup key
-            apiStatus.exhaustedApis.delete(sourceName);
-        } else {
-            console.log(`⏭️ [${checkId}] ${sourceName}: Skipping - marked as exhausted`);
-            console.log(`   [${checkId}] Time since reset: ${timeSinceReset} minutes`);
-            console.log(`   [${checkId}] Will retry in: ${nextResetIn} minutes`);
-            console.log(`   [${checkId}] Reset interval: ${Math.round(apiStatus.resetInterval / 1000 / 60)} minutes`);
-            return false;
-        }
+        console.log(`⏭️ [${checkId}] ${sourceName}: Skipping - marked as exhausted`);
+        console.log(`   [${checkId}] Time since reset: ${timeSinceReset} minutes`);
+        console.log(`   [${checkId}] Will retry in: ${nextResetIn} minutes`);
+        console.log(`   [${checkId}] Reset interval: ${Math.round(apiStatus.resetInterval / 1000 / 60)} minutes`);
+        return false;
     }
     
     let hasKey = false;
     let keyDetails = {};
     
-    // Get key info with backup support
-    const keyInfo = getApiKeyWithBackup(sourceName);
-    
-    // If we have key info from the backup system, use it
-    if (keyInfo && keyInfo.key) {
-        hasKey = true;
-        
-        // Handle different key formats
-        if (typeof keyInfo.key === 'object' && keyInfo.key.appId && keyInfo.key.apiKey) {
-            // For composite keys like Adzuna
+    switch (sourceName) {
+        case 'Theirstack':
+            hasKey = !!process.env.THEIRSTACK_API_KEY;
             keyDetails = {
-                appIdExists: true,
-                appIdLength: keyInfo.key.appId.length,
-                apiKeyExists: true,
-                apiKeyLength: keyInfo.key.apiKey.length,
-                appIdPrefix: keyInfo.key.appId.substring(0, 8) + '...',
-                apiKeyPrefix: keyInfo.key.apiKey.substring(0, 8) + '...',
-                usingBackup: keyInfo.index > 0,
-                backupIndex: keyInfo.index,
-                totalBackups: keyInfo.total
+                keyExists: !!process.env.THEIRSTACK_API_KEY,
+                keyLength: process.env.THEIRSTACK_API_KEY ? process.env.THEIRSTACK_API_KEY.length : 0,
+                keyPrefix: process.env.THEIRSTACK_API_KEY ? process.env.THEIRSTACK_API_KEY.substring(0, 8) + '...' : 'none'
             };
-        } else if (typeof keyInfo.key === 'string') {
-            // For simple string keys
+            break;
+        case 'Adzuna':
+            hasKey = !!(process.env.ADZUNA_APP_ID && process.env.ADZUNA_API_KEY);
             keyDetails = {
-                keyExists: true,
-                keyLength: keyInfo.key.length,
-                keyPrefix: keyInfo.key.substring(0, 8) + '...',
-                usingBackup: keyInfo.index > 0,
-                backupIndex: keyInfo.index,
-                totalBackups: keyInfo.total
+                appIdExists: !!process.env.ADZUNA_APP_ID,
+                appIdLength: process.env.ADZUNA_APP_ID ? process.env.ADZUNA_APP_ID.length : 0,
+                apiKeyExists: !!process.env.ADZUNA_API_KEY,
+                apiKeyLength: process.env.ADZUNA_API_KEY ? process.env.ADZUNA_API_KEY.length : 0,
+                appIdPrefix: process.env.ADZUNA_APP_ID ? process.env.ADZUNA_APP_ID.substring(0, 8) + '...' : 'none',
+                apiKeyPrefix: process.env.ADZUNA_API_KEY ? process.env.ADZUNA_API_KEY.substring(0, 8) + '...' : 'none'
             };
-        }
-    } else {
-        // Fallback to the old method if backup system doesn't have a key
-        switch (sourceName) {
-            case 'Theirstack':
-                hasKey = !!process.env.THEIRSTACK_API_KEY;
-                keyDetails = {
-                    keyExists: !!process.env.THEIRSTACK_API_KEY,
-                    keyLength: process.env.THEIRSTACK_API_KEY ? process.env.THEIRSTACK_API_KEY.length : 0,
-                    keyPrefix: process.env.THEIRSTACK_API_KEY ? process.env.THEIRSTACK_API_KEY.substring(0, 8) + '...' : 'none'
-                };
-                break;
-            case 'Adzuna':
-                hasKey = !!(process.env.ADZUNA_APP_ID && process.env.ADZUNA_API_KEY);
-                keyDetails = {
-                    appIdExists: !!process.env.ADZUNA_APP_ID,
-                    appIdLength: process.env.ADZUNA_APP_ID ? process.env.ADZUNA_APP_ID.length : 0,
-                    apiKeyExists: !!process.env.ADZUNA_API_KEY,
-                    apiKeyLength: process.env.ADZUNA_API_KEY ? process.env.ADZUNA_API_KEY.length : 0,
-                    appIdPrefix: process.env.ADZUNA_APP_ID ? process.env.ADZUNA_APP_ID.substring(0, 8) + '...' : 'none',
-                    apiKeyPrefix: process.env.ADZUNA_API_KEY ? process.env.ADZUNA_API_KEY.substring(0, 8) + '...' : 'none'
-                };
-                break;
-            case 'TheMuse':
-                hasKey = !!process.env.THEMUSE_API_KEY;
-                keyDetails = {
-                    keyExists: !!process.env.THEMUSE_API_KEY,
-                    keyLength: process.env.THEMUSE_API_KEY ? process.env.THEMUSE_API_KEY.length : 0,
-                    keyPrefix: process.env.THEMUSE_API_KEY ? process.env.THEMUSE_API_KEY.substring(0, 8) + '...' : 'none'
-                };
-                break;
-            case 'Reed':
-                hasKey = !!process.env.REED_API_KEY;
-                keyDetails = {
-                    keyExists: !!process.env.REED_API_KEY,
-                    keyLength: process.env.REED_API_KEY ? process.env.REED_API_KEY.length : 0,
-                    keyPrefix: process.env.REED_API_KEY ? process.env.REED_API_KEY.substring(0, 8) + '...' : 'none'
-                };
-                break;
-            case 'JSearch-RapidAPI':
-            case 'RapidAPI-Jobs':
-                hasKey = !!process.env.RAPIDAPI_KEY;
-                keyDetails = {
-                    keyExists: !!process.env.RAPIDAPI_KEY,
-                    keyLength: process.env.RAPIDAPI_KEY ? process.env.RAPIDAPI_KEY.length : 0,
-                    keyPrefix: process.env.RAPIDAPI_KEY ? process.env.RAPIDAPI_KEY.substring(0, 8) + '...' : 'none'
-                };
-                break;
-            case 'JobsMulti':
-                hasKey = !!process.env.JOBSMULTI_API_KEY;
-                keyDetails = {
-                    keyExists: !!process.env.JOBSMULTI_API_KEY,
-                    keyLength: process.env.JOBSMULTI_API_KEY ? process.env.JOBSMULTI_API_KEY.length : 0,
-                    keyPrefix: process.env.JOBSMULTI_API_KEY ? process.env.JOBSMULTI_API_KEY.substring(0, 8) + '...' : 'none'
-                };
-                break;
-            case 'Jobber':
-                hasKey = !!process.env.JOBBER_API_KEY;
-                keyDetails = {
-                    keyExists: !!process.env.JOBBER_API_KEY,
-                    keyLength: process.env.JOBBER_API_KEY ? process.env.JOBBER_API_KEY.length : 0,
-                    keyPrefix: process.env.JOBBER_API_KEY ? process.env.JOBBER_API_KEY.substring(0, 8) + '...' : 'none'
-                };
-                break;
-            default:
-                hasKey = false;
-                keyDetails = { error: 'Unknown source' };
-                break;
-        }
+            break;
+        case 'TheMuse':
+            hasKey = !!process.env.THEMUSE_API_KEY;
+            keyDetails = {
+                keyExists: !!process.env.THEMUSE_API_KEY,
+                keyLength: process.env.THEMUSE_API_KEY ? process.env.THEMUSE_API_KEY.length : 0,
+                keyPrefix: process.env.THEMUSE_API_KEY ? process.env.THEMUSE_API_KEY.substring(0, 8) + '...' : 'none'
+            };
+            break;
+        case 'Reed':
+            hasKey = !!process.env.REED_API_KEY;
+            keyDetails = {
+                keyExists: !!process.env.REED_API_KEY,
+                keyLength: process.env.REED_API_KEY ? process.env.REED_API_KEY.length : 0,
+                keyPrefix: process.env.REED_API_KEY ? process.env.REED_API_KEY.substring(0, 8) + '...' : 'none'
+            };
+            break;
+        case 'JSearch-RapidAPI':
+        case 'RapidAPI-Jobs':
+            hasKey = !!process.env.RAPIDAPI_KEY;
+            keyDetails = {
+                keyExists: !!process.env.RAPIDAPI_KEY,
+                keyLength: process.env.RAPIDAPI_KEY ? process.env.RAPIDAPI_KEY.length : 0,
+                keyPrefix: process.env.RAPIDAPI_KEY ? process.env.RAPIDAPI_KEY.substring(0, 8) + '...' : 'none'
+            };
+            break;
+        default:
+            hasKey = false;
+            keyDetails = { error: 'Unknown source' };
     }
     
     if (!hasKey) {
@@ -421,14 +222,7 @@ async function makeApiCallWithExhaustionDetectionEnhanced(sourceName, apiCallFun
         if (Array.isArray(result) && result.length === 0) {
             const exhaustionCheck = detectApiExhaustion(null, { status: 200, data: result }, sourceName);
             if (exhaustionCheck.isExhausted) {
-                // Try to rotate to next API key before marking as exhausted
-                const rotated = rotateToNextApiKey(sourceName);
-                if (rotated) {
-                    console.log(`🔄 [${callId}] ${sourceName}: Rotated to next API key due to possible exhaustion`);
-                    // Don't mark as exhausted since we've rotated to a new key
-                } else {
-                    markApiAsExhausted(sourceName, exhaustionCheck.reason);
-                }
+                markApiAsExhausted(sourceName, exhaustionCheck.reason);
             }
         }
         
@@ -455,29 +249,9 @@ async function makeApiCallWithExhaustionDetectionEnhanced(sourceName, apiCallFun
         const exhaustionCheck = detectApiExhaustion(error, error.response, sourceName);
         
         if (exhaustionCheck.isExhausted) {
-            // Try to rotate to next API key before marking as exhausted
-            const rotated = rotateToNextApiKey(sourceName);
-            if (rotated) {
-                console.log(`🔄 [${callId}] ${sourceName}: Rotated to next API key due to exhaustion`);
-                // Try the API call again with the new key
-                console.log(`🔁 [${callId}] ${sourceName}: Retrying API call with new key...`);
-                return makeApiCallWithExhaustionDetectionEnhanced(sourceName, apiCallFunction, ...args);
-            } else {
-                markApiAsExhausted(sourceName, exhaustionCheck.reason);
-                console.log(`🚫 [${callId}] ${sourceName}: Marked as exhausted - ${exhaustionCheck.reason}`);
-                return [];
-            }
-        }
-        
-        // For suspicious errors (non-exhaustion), also try rotating keys
-        if (!apiStatus.exhaustedApis.has(sourceName)) {
-            const rotated = rotateToNextApiKey(sourceName);
-            if (rotated) {
-                console.log(`🔄 [${callId}] ${sourceName}: Rotated to next API key due to error`);
-                // Try the API call again with the new key
-                console.log(`🔁 [${callId}] ${sourceName}: Retrying API call with new key...`);
-                return makeApiCallWithExhaustionDetectionEnhanced(sourceName, apiCallFunction, ...args);
-            }
+            markApiAsExhausted(sourceName, exhaustionCheck.reason);
+            console.log(`🚫 [${callId}] ${sourceName}: Marked as exhausted - ${exhaustionCheck.reason}`);
+            return [];
         }
         
         console.log(`⚠️ [${callId}] ${sourceName}: Non-exhaustion error - ${error.message}`);
@@ -491,9 +265,6 @@ function getApiStatusReportEnhanced() {
     const timeSinceReset = currentTime - apiStatus.lastResetTime;
     const nextResetIn = Math.round((apiStatus.resetInterval - timeSinceReset) / 1000 / 60);
     
-    // Get all API sources for the report
-    const allApiSources = ['JSearch-RapidAPI', 'Adzuna', 'TheMuse', 'Reed', 'RapidAPI-Jobs', 'Theirstack', 'JobsMulti', 'Jobber'];
-    
     const report = {
         reportId: reportId,
         timestamp: new Date().toISOString(),
@@ -505,48 +276,32 @@ function getApiStatusReportEnhanced() {
         totalSuspicious: apiStatus.suspiciousApis.size,
         resetIntervalMinutes: Math.round(apiStatus.resetInterval / 1000 / 60),
         timeSinceResetMinutes: Math.round(timeSinceReset / 1000 / 60),
-        tokenRotationStatus: {
-            enabled: apiStatus.tokenRotationEnabled,
-            sourcesWithBackupTokens: Object.keys(apiStatus.currentTokenIndex || {})
-        },
         systemHealth: {
-            totalApis: allApiSources.length,
-            healthyApis: allApiSources.length - apiStatus.exhaustedApis.size - apiStatus.suspiciousApis.size,
-            exhaustedPercentage: Math.round((apiStatus.exhaustedApis.size / allApiSources.length) * 100),
-            suspiciousPercentage: Math.round((apiStatus.suspiciousApis.size / allApiSources.length) * 100),
-            healthyPercentage: Math.round(((allApiSources.length - apiStatus.exhaustedApis.size - apiStatus.suspiciousApis.size) / allApiSources.length) * 100)
+            totalApis: 6, // Total number of APIs in the system
+            healthyApis: 6 - apiStatus.exhaustedApis.size - apiStatus.suspiciousApis.size,
+            exhaustedPercentage: Math.round((apiStatus.exhaustedApis.size / 6) * 100),
+            suspiciousPercentage: Math.round((apiStatus.suspiciousApis.size / 6) * 100),
+            healthyPercentage: Math.round(((6 - apiStatus.exhaustedApis.size - apiStatus.suspiciousApis.size) / 6) * 100)
         },
         detailedStatus: {
             exhausted: Array.from(apiStatus.exhaustedApis).map(api => ({
                 name: api,
                 status: 'exhausted',
                 timeSinceExhaustion: 'unknown', // Could be enhanced to track individual exhaustion times
-                estimatedRecovery: nextResetIn > 0 ? `${nextResetIn} minutes` : 'immediate',
-                tokenRotation: {
-                    enabled: apiStatus.tokenRotationEnabled && apiStatus.currentTokenIndex && api in apiStatus.currentTokenIndex,
-                    currentTokenIndex: apiStatus.currentTokenIndex?.[api] || 0
-                }
+                estimatedRecovery: nextResetIn > 0 ? `${nextResetIn} minutes` : 'immediate'
             })),
             suspicious: Array.from(apiStatus.suspiciousApis.entries()).map(([api, count]) => ({
                 name: api,
                 status: 'suspicious',
                 suspiciousCount: count,
                 maxSuspiciousFailures: apiStatus.maxSuspiciousFailures,
-                remainingFailuresBeforeExhaustion: apiStatus.maxSuspiciousFailures - count,
-                tokenRotation: {
-                    enabled: apiStatus.tokenRotationEnabled && apiStatus.currentTokenIndex && api in apiStatus.currentTokenIndex,
-                    currentTokenIndex: apiStatus.currentTokenIndex?.[api] || 0
-                }
+                remainingFailuresBeforeExhaustion: apiStatus.maxSuspiciousFailures - count
             })),
-            healthy: allApiSources
+            healthy: ['JSearch-RapidAPI', 'Adzuna', 'TheMuse', 'Reed', 'RapidAPI-Jobs', 'Theirstack']
                 .filter(api => !apiStatus.exhaustedApis.has(api) && !apiStatus.suspiciousApis.has(api))
                 .map(api => ({
                     name: api,
                     status: 'healthy',
-                    tokenRotation: {
-                        enabled: apiStatus.tokenRotationEnabled && apiStatus.currentTokenIndex && api in apiStatus.currentTokenIndex,
-                        currentTokenIndex: apiStatus.currentTokenIndex?.[api] || 0
-                    },
                     available: true
                 }))
         }
@@ -571,15 +326,6 @@ function manualResetApiStatus() {
     apiStatus.exhaustedApis.clear();
     apiStatus.suspiciousApis.clear();
     apiStatus.lastResetTime = Date.now();
-    
-    // Reset token rotation indices if enabled
-    if (apiStatus.tokenRotationEnabled && apiStatus.currentTokenIndex) {
-        console.log('🔄 MANUAL RESET: Resetting all API token rotation indices');
-        for (const source in apiStatus.currentTokenIndex) {
-            apiStatus.currentTokenIndex[source] = 0;
-        }
-    }
-    
     console.log('✅ All APIs reset and available for retry');
 }
 
@@ -691,31 +437,7 @@ export default async function handler(req, res) {
 
         console.log('🚀 Starting enhanced job search with REAL-TIME streaming...');
 
-        // First try using the Jobs Collector for faster results
-        onProgress('Starting Jobs Collector for faster results...', 10);
-        
-        try {
-            const collectedJobs = await collectJobsFromAllSources(analysis, filters);
-            
-            if (collectedJobs.length > 0) {
-                console.log(`✅ Using Jobs Collector results: ${collectedJobs.length} jobs found`);
-                totalJobsFound = collectedJobs.length;
-                allJobs.push(...collectedJobs);
-                
-                // Send all collected jobs to the client
-                onJobFound(collectedJobs, 'JobsCollector', 100);
-                onProgress(`Found ${totalJobsFound} jobs using Jobs Collector`, 90);
-            } else {
-                console.log('⚠️ Jobs Collector returned no results, falling back to standard search');
-                // Fall back to the standard search process
-                await scrapeJobListingsWithStreaming(analysis, filters, onJobFound, onProgress);
-            }
-        } catch (collectorError) {
-            console.error('❌ Jobs Collector error:', collectorError.message);
-            console.log('⚠️ Falling back to standard search process');
-            // Fall back to the standard search process
-            await scrapeJobListingsWithStreaming(analysis, filters, onJobFound, onProgress);
-        }
+        const result = await scrapeJobListingsWithStreaming(analysis, filters, onJobFound, onProgress);
 
         const totalSearchTime = ((Date.now() - searchStartTime) / 1000).toFixed(1);
         console.log(`=== JOB SEARCH COMPLETED ===`);
@@ -764,81 +486,6 @@ export default async function handler(req, res) {
     }
 }
 
-async function collectJobsFromAllSources(analysis, filters) {
-    console.log('🔄 Jobs Collector: Starting job collection from all sources...');
-    const allJobs = [];
-    const sourceResults = {};
-    
-    // Get available sources with API keys
-    const availableSources = sources.filter(source => {
-        const hasKey = checkApiKeyForSourceEnhanced(source.name).hasKey;
-        if (!hasKey) {
-            console.log(`⚠️ Jobs Collector: Skipping ${source.name} - API key missing`);
-        }
-        return hasKey;
-    });
-    
-    if (availableSources.length === 0) {
-        console.log('❌ Jobs Collector: No sources available with valid API keys');
-        return [];
-    }
-    
-    console.log(`✅ Jobs Collector: Found ${availableSources.length} available sources`);
-    
-    // Collect jobs from all available sources in parallel
-    const results = await Promise.allSettled(
-        availableSources.map(async (source) => {
-            try {
-                console.log(`🔍 Jobs Collector: Collecting from ${source.name}...`);
-                const jobs = await source.func(analysis, filters);
-                sourceResults[source.name] = {
-                    count: jobs.length,
-                    success: true
-                };
-                console.log(`✅ Jobs Collector: ${source.name} returned ${jobs.length} jobs`);
-                return jobs;
-            } catch (error) {
-                console.error(`❌ Jobs Collector: Error collecting from ${source.name}:`, error.message);
-                sourceResults[source.name] = {
-                    count: 0,
-                    success: false,
-                    error: error.message
-                };
-                return [];
-            }
-        })
-    );
-    
-    // Process results
-    results.forEach(result => {
-        if (result.status === 'fulfilled') {
-            allJobs.push(...result.value);
-        }
-    });
-    
-    // Remove duplicates based on title and company
-    const uniqueJobs = [];
-    const jobMap = new Map();
-    
-    allJobs.forEach(job => {
-        const key = `${job.title.toLowerCase()}-${job.company.toLowerCase()}`;
-        if (!jobMap.has(key)) {
-            jobMap.set(key, true);
-            uniqueJobs.push(job);
-        }
-    });
-    
-    console.log(`✅ Jobs Collector: Collected ${uniqueJobs.length} unique jobs from ${availableSources.length} sources`);
-    
-    // Log source statistics
-    console.log('📊 Jobs Collector: Source statistics:');
-    Object.entries(sourceResults).forEach(([source, result]) => {
-        console.log(`  - ${source}: ${result.count} jobs, ${result.success ? 'Success' : 'Failed'}`); 
-    });
-    
-    return uniqueJobs;
-}
-
 async function scrapeJobListingsWithStreaming(analysis, filters, onJobFound, onProgress) {
     console.log('=== STARTING REAL-TIME JOB SEARCH WITH DEBUGGING ===');
     
@@ -851,8 +498,6 @@ async function scrapeJobListingsWithStreaming(analysis, filters, onJobFound, onP
     console.log('  Theirstack:', process.env.THEIRSTACK_API_KEY ? 'EXISTS' : 'MISSING');
     console.log('  Adzuna App ID:', process.env.ADZUNA_APP_ID ? 'EXISTS' : 'MISSING');
     console.log('  Adzuna API Key:', process.env.ADZUNA_API_KEY ? 'EXISTS' : 'MISSING');
-    console.log('  JobsMulti:', process.env.JOBSMULTI_API_KEY ? 'EXISTS' : 'MISSING');
-    console.log('  Jobber:', process.env.JOBBER_API_KEY ? 'EXISTS' : 'MISSING');
     console.log('  TheMuse:', process.env.THEMUSE_API_KEY ? 'EXISTS' : 'MISSING');
     console.log('  Reed:', process.env.REED_API_KEY ? 'EXISTS' : 'MISSING');
     console.log('  RapidAPI:', process.env.RAPIDAPI_KEY ? 'EXISTS' : 'MISSING');
@@ -863,9 +508,7 @@ async function scrapeJobListingsWithStreaming(analysis, filters, onJobFound, onP
         { name: 'TheMuse', func: searchTheMuseJobsWithDetection, weight: 20 },
         { name: 'Reed', func: searchReedJobsWithDetection, weight: 15 },
         { name: 'RapidAPI-Jobs', func: searchRapidAPIJobsWithDetection, weight: 15 },
-        { name: 'Theirstack', func: searchTheirstackJobsWithDetection, weight: 10 },
-        { name: 'JobsMulti', func: searchJobsMultiWithDetection, weight: 25 },
-        { name: 'Jobber', func: searchJobberWithDetection, weight: 20 }
+        { name: 'Theirstack', func: searchTheirstackJobsWithDetection, weight: 10 }
     ];
 
     const queries = generateFocusedSearchQueries(analysis);
@@ -1388,109 +1031,6 @@ async function searchTheMuseJobsWithDetection(query, filters) {
             type: job.type || 'Full-time',
             datePosted: job.publication_date || new Date().toISOString()
         }));
-    });
-}
-
-async function searchJobberWithDetection(query, filters) {
-    return makeApiCallWithExhaustionDetectionEnhanced('Jobber', async () => {
-        const JOBBER_API_KEY = process.env.JOBBER_API_KEY;
-        
-        if (!JOBBER_API_KEY) {
-            console.log('❌ Jobber API key missing');
-            return [];
-        }
-        
-        console.log('🔍 Jobber: Making API request...');
-        
-        try {
-            // Jobber API endpoint
-            const response = await axios.get('https://api.jobber.io/v1/jobs', {
-                params: {
-                    query: query,
-                    remote: true,
-                    page: 1,
-                    per_page: 50
-                },
-                headers: {
-                    'X-API-Key': JOBBER_API_KEY,
-                    'Content-Type': 'application/json'
-                },
-                timeout: 15000
-            });
-            
-            console.log(`✅ Jobber responded with ${response.data?.jobs?.length || 0} jobs`);
-            
-            if (!response.data?.jobs) {
-                return [];
-            }
-            
-            return response.data.jobs.map(job => ({
-                title: job.title,
-                company: job.company_name || 'Unknown Company',
-                location: job.location || 'Remote',
-                link: job.apply_url || '#',
-                source: 'Jobber',
-                description: job.description || '',
-                salary: job.salary_range || 'Salary not specified',
-                type: job.employment_type || 'Full-time',
-                datePosted: job.posted_date || new Date().toISOString()
-            }));
-        } catch (error) {
-            console.error('❌ Jobber API error:', error.message);
-            return [];
-        }
-    });
-}
-
-async function searchJobsMultiWithDetection(query, filters) {
-    return makeApiCallWithExhaustionDetectionEnhanced('JobsMulti', async () => {
-        const JOBSMULTI_API_KEY = process.env.JOBSMULTI_API_KEY;
-        
-        if (!JOBSMULTI_API_KEY) {
-            console.log('❌ JobsMulti API key missing');
-            return [];
-        }
-        
-        console.log('🔍 JobsMulti: Making API request...');
-        
-        try {
-            // JobsMulti API endpoint
-            const response = await axios.get('https://api.jobapis.com/v1/search', {
-                params: {
-                    q: query,
-                    location: filters.location || 'Remote',
-                    remote: true,
-                    page: 1,
-                    limit: 50
-                },
-                headers: {
-                    'Authorization': `Bearer ${JOBSMULTI_API_KEY}`,
-                    'Content-Type': 'application/json'
-                },
-                timeout: 15000
-            });
-            
-            console.log(`✅ JobsMulti responded with ${response.data?.jobs?.length || 0} jobs`);
-            
-            if (!response.data?.jobs) {
-                return [];
-            }
-            
-            return response.data.jobs.map(job => ({
-                title: job.title,
-                company: job.company || 'Unknown Company',
-                location: job.location || 'Remote',
-                link: job.url || job.apply_url || '#',
-                source: 'JobsMulti',
-                description: job.description || '',
-                salary: job.salary || 'Salary not specified',
-                type: job.job_type || 'Full-time',
-                datePosted: job.date_posted || new Date().toISOString()
-            }));
-        } catch (error) {
-            console.error('❌ JobsMulti API error:', error.message);
-            return [];
-        }
     });
 }
 
