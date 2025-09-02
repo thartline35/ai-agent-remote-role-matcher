@@ -250,6 +250,9 @@ class AIJobMatcher {
             };
 
             console.log('Enhanced resume analysis completed:', this.resumeAnalysis);
+            console.log('Technical Skills Count:', this.resumeAnalysis.technicalSkills.length);
+            console.log('Industries Count:', this.resumeAnalysis.industries.length);
+            console.log('Work Experience Count:', this.resumeAnalysis.workExperience.length);
 
             this.displayEnhancedSkillsAnalysis();
             this.showSearchSection();
@@ -281,6 +284,12 @@ class AIJobMatcher {
     }
 
     displayEnhancedSkillsAnalysis() {
+        console.log('Displaying enhanced skills analysis...');
+        console.log('Current resumeAnalysis:', this.resumeAnalysis);
+        console.log('Technical Skills:', this.resumeAnalysis.technicalSkills);
+        console.log('Industries:', this.resumeAnalysis.industries);
+        console.log('Work Experience:', this.resumeAnalysis.workExperience);
+        
         this.skillsGrid.innerHTML = '';
 
         // Create summary card first
