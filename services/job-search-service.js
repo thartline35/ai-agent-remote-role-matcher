@@ -2,6 +2,7 @@
 
 import { apiManager } from './api-manager.js';
 import { scraperManager } from './scraper-manager.js';
+import { cacheManager } from './cache-manager.js';
 import { apiConfig } from '../config/api-config.js';
 import OpenAI from 'openai';
 
@@ -437,6 +438,26 @@ export class JobSearchService {
         const queries = this.generateSearchQueries(analysis);
         console.log('📝 Generated search queries:', queries);
         
+        // Check cache first
+        const cacheKey = cacheManager.generateCacheKey(queries[0], filters);
+        const cachedResults = await cacheManager.getCachedJobSearch(queries[0], filters);
+        
+        if (cachedResults) {
+            console.log('💾 Using cached results');
+            onProgress('Loading cached results...', 100);
+            
+            // Stream cached jobs
+            if (onJobFound && cachedResults.jobs) {
+                cachedResults.jobs.forEach(job => onJobFound(job));
+            }
+            
+            return {
+                ...cachedResults,
+                cached: true,
+                cacheKey: cacheKey.substring(0, 8) + '...'
+            };
+        }
+        
         onProgress('Generating search queries...', 5);
         
         const allJobs = [];
@@ -606,13 +627,19 @@ export class JobSearchService {
         // Sort by title for now (can be enhanced with AI matching later)
         const sortedJobs = allJobs.sort((a, b) => a.title.localeCompare(b.title));
         
-        return {
+        const finalResults = {
             allJobs: sortedJobs,
             totalJobs: sortedJobs.length,
             userMessages: userMessages,
             apiStatus: apiStatusReport,
             scraperStatus: scraperStatusReport
         };
+        
+        // Cache the results
+        await cacheManager.cacheJobSearch(queries[0], filters, finalResults);
+        console.log('💾 Results cached for future searches');
+        
+        return finalResults;
     }
 }
 

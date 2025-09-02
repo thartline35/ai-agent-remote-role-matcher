@@ -3,6 +3,7 @@ class AIJobMatcher {
     constructor() {
         this.initializeElements();
         this.bindEvents();
+        this.initializeLazyLoading();
         this.currentFile = null;
         this.resumeAnalysis = {
             technicalSkills: [],
@@ -77,6 +78,17 @@ class AIJobMatcher {
         // Error elements
         this.errorSection = document.getElementById('error-section');
         this.errorMessage = document.getElementById('error-message');
+    }
+
+    /**
+     * Initialize lazy loading
+     */
+    initializeLazyLoading() {
+        // Initialize lazy loader
+        if (typeof lazyLoader !== 'undefined') {
+            lazyLoader.init();
+            console.log('🔄 Lazy loading initialized');
+        }
     }
 
     bindEvents() {
@@ -1131,10 +1143,26 @@ class AIJobMatcher {
         this.currentFilteredJobs = filteredJobs;
         this.jobsGrid.innerHTML = '';
 
-        filteredJobs.forEach(job => {
-            const jobCard = this.createEnhancedJobCard(job);
-            this.jobsGrid.appendChild(jobCard);
-        });
+        // Use lazy loading for better performance
+        if (filteredJobs.length > 20 && typeof lazyLoader !== 'undefined') {
+            // Use virtual scrolling for large datasets
+            this.virtualScrolling = lazyLoader.createVirtualScrollingContainer(
+                this.jobsGrid, 
+                filteredJobs, 
+                200 // job card height
+            );
+        } else {
+            // Use regular lazy loading for smaller datasets
+            filteredJobs.forEach(job => {
+                const jobCard = this.createEnhancedJobCard(job);
+                this.jobsGrid.appendChild(jobCard);
+                
+                // Apply lazy loading to each card
+                if (typeof lazyLoader !== 'undefined') {
+                    lazyLoader.observeJobCard(jobCard);
+                }
+            });
+        }
 
         this.displayedJobsCount = filteredJobs.length;
 

@@ -3,6 +3,7 @@
 import { jobSearchService } from '../services/job-search-service.js';
 import { apiManager } from '../services/api-manager.js';
 import { scraperManager } from '../services/scraper-manager.js';
+import { cacheManager } from '../services/cache-manager.js';
 
 /**
  * Modular job search endpoint
@@ -30,11 +31,25 @@ export default async function handler(req, res) {
         });
     }
     
-    if (req.method === 'POST' && req.url?.includes('/reset-api-status')) {
-        apiManager.manualResetApiStatus();
-        scraperManager.resetScraperStatus();
-        return res.status(200).json({ message: 'API and scraper status reset successfully' });
-    }
+            if (req.method === 'POST' && req.url?.includes('/reset-api-status')) {
+            apiManager.manualResetApiStatus();
+            scraperManager.resetScraperStatus();
+            return res.status(200).json({ message: 'API and scraper status reset successfully' });
+        }
+
+        // Cache management endpoints
+        if (req.method === 'GET' && req.url?.includes('/cache-status')) {
+            const cacheStats = cacheManager.getStats();
+            return res.status(200).json({
+                cacheStats,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        if (req.method === 'POST' && req.url?.includes('/clear-cache')) {
+            await cacheManager.clearAll();
+            return res.status(200).json({ message: 'Cache cleared successfully' });
+        }
     
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });

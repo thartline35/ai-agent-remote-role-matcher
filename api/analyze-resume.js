@@ -28,32 +28,38 @@ async function analyzeResume(resumeText, openai) {
                     role: "system",
                     content: `You are an expert resume analyzer specializing in extracting comprehensive job-relevant information. Your job is to deeply analyze resumes and extract ALL relevant information for job matching, regardless of how it's presented.
 
-INSTRUCTIONS:
-- Extract technical skills from ANY mention (tools used, software, programming languages, platforms, etc.)
-- Extract soft skills from descriptions of achievements, leadership, collaboration, etc.
-- Extract work experience including job titles, responsibilities, achievements, and implied roles
-- Look for education, certifications, and training
-- Identify seniority level and qualifications from context
+CRITICAL INSTRUCTIONS:
+- Extract COMPLETE technical skills, tools, and software names (e.g., "QuickBooks", "Microsoft Excel", "JavaScript", "React.js")
+- Extract COMPLETE job titles and role descriptions (e.g., "Senior Software Engineer", "Marketing Manager", "Financial Analyst")
+- Extract COMPLETE education and certification names (e.g., "Bachelor of Science in Computer Science", "MBA", "AWS Certified Solutions Architect")
+- Extract COMPLETE industry names and company types (e.g., "Healthcare", "Financial Services", "Technology", "E-commerce")
+- Extract COMPLETE soft skills and competencies (e.g., "Project Management", "Team Leadership", "Strategic Planning")
+- Extract COMPLETE achievements and accomplishments with context
+- Look for years of experience, team sizes managed, budget responsibilities, etc.
 - Consider role descriptions and responsibilities, not just job titles
 - Extract industry experience and domain knowledge
 
-For work experience, don't just look for formal job titles - extract:
+For work experience, extract:
+- Complete job titles and role descriptions
 - What they actually DID (responsibilities, tasks, projects)
 - What roles they performed (even if not in the title)
 - What industries they worked in
 - What level of responsibility they had
 - What achievements they accomplished
+- Years of experience in each role
+
+IMPORTANT: Only extract complete, meaningful terms. Do NOT extract partial words or fragments.
 
 Return ONLY a valid JSON object:
 {
-  "technicalSkills": ["list of all technical skills, tools, software, languages"],
-  "softSkills": ["list of soft skills, leadership qualities, interpersonal skills"], 
-  "workExperience": ["list of job titles, roles, responsibilities, and functions performed"],
-  "education": ["list of degrees, certifications, courses, training"],
-  "qualifications": ["list of experience levels, specializations, achievements"],
-  "industries": ["list of industries worked in"],
-  "responsibilities": ["list of key responsibilities and functions"],
-  "achievements": ["list of key achievements and accomplishments"],
+  "technicalSkills": ["complete list of technical skills, tools, software, programming languages"],
+  "softSkills": ["complete list of soft skills, leadership qualities, interpersonal skills"], 
+  "workExperience": ["complete list of job titles, roles, responsibilities, and functions performed"],
+  "education": ["complete list of degrees, certifications, courses, training programs"],
+  "qualifications": ["complete list of experience levels, specializations, achievements"],
+  "industries": ["complete list of industries and sectors worked in"],
+  "responsibilities": ["complete list of key responsibilities and functions"],
+  "achievements": ["complete list of key achievements and accomplishments"],
   "seniorityLevel": "entry|mid|senior|lead|executive"
 }`
                 },
@@ -86,14 +92,14 @@ Return ONLY a valid JSON object:
             // Merge with enhanced fallback extraction
             const fallbackAnalysis = extractEnhancedSkillsFromText(resumeText);
             const mergedAnalysis = {
-                technicalSkills: [...new Set([...(analysis.technicalSkills || []), ...(fallbackAnalysis.technicalSkills || [])])],
-                softSkills: [...new Set([...(analysis.softSkills || []), ...(fallbackAnalysis.softSkills || [])])],
-                workExperience: [...new Set([...(analysis.workExperience || []), ...(fallbackAnalysis.workExperience || [])])],
-                education: [...new Set([...(analysis.education || []), ...(fallbackAnalysis.education || [])])],
-                qualifications: [...new Set([...(analysis.qualifications || []), ...(fallbackAnalysis.qualifications || [])])],
-                industries: [...new Set([...(analysis.industries || []), ...(fallbackAnalysis.industries || [])])],
-                responsibilities: [...new Set([...(analysis.responsibilities || []), ...(fallbackAnalysis.responsibilities || [])])],
-                achievements: [...new Set([...(analysis.achievements || []), ...(fallbackAnalysis.achievements || [])])],
+                technicalSkills: cleanAndDeduplicate([...(analysis.technicalSkills || []), ...(fallbackAnalysis.technicalSkills || [])]),
+                softSkills: cleanAndDeduplicate([...(analysis.softSkills || []), ...(fallbackAnalysis.softSkills || [])]),
+                workExperience: cleanAndDeduplicate([...(analysis.workExperience || []), ...(fallbackAnalysis.workExperience || [])]),
+                education: cleanAndDeduplicate([...(analysis.education || []), ...(fallbackAnalysis.education || [])]),
+                qualifications: cleanAndDeduplicate([...(analysis.qualifications || []), ...(fallbackAnalysis.qualifications || [])]),
+                industries: cleanAndDeduplicate([...(analysis.industries || []), ...(fallbackAnalysis.industries || [])]),
+                responsibilities: cleanAndDeduplicate([...(analysis.responsibilities || []), ...(fallbackAnalysis.responsibilities || [])]),
+                achievements: cleanAndDeduplicate([...(analysis.achievements || []), ...(fallbackAnalysis.achievements || [])]),
                 seniorityLevel: (analysis.seniorityLevel && analysis.seniorityLevel.trim()) || fallbackAnalysis.seniorityLevel || 'mid'
             };
 
@@ -106,6 +112,17 @@ Return ONLY a valid JSON object:
         console.error('Error analyzing resume:', error);
         return extractEnhancedSkillsFromText(resumeText);
     }
+}
+
+// Helper function to clean and deduplicate arrays
+function cleanAndDeduplicate(items) {
+    return [...new Set(
+        items
+            .filter(item => item && typeof item === 'string' && item.trim().length > 1)
+            .map(item => item.trim())
+            .filter(item => !/^[a-z]$/i.test(item)) // Remove single letters
+            .filter(item => item.length > 2) // Remove very short items
+    )];
 }
 
 // Enhanced skill extraction with better role understanding
@@ -247,25 +264,30 @@ function extractEnhancedSkillsFromText(resumeText) {
         'reduced', 'decreased', 'minimized', 'cut', 'saved'
     ];
 
-    // Check for matches
+    // Check for matches with word boundaries to prevent partial matches
     techSkills.forEach(skill => {
-        if (text.includes(skill)) analysis.technicalSkills.push(skill);
+        const regex = new RegExp(`\\b${skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        if (regex.test(resumeText)) analysis.technicalSkills.push(skill);
     });
 
     softSkills.forEach(skill => {
-        if (text.includes(skill)) analysis.softSkills.push(skill);
+        const regex = new RegExp(`\\b${skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        if (regex.test(resumeText)) analysis.softSkills.push(skill);
     });
 
     experiencePatterns.forEach(exp => {
-        if (text.includes(exp)) analysis.workExperience.push(exp);
+        const regex = new RegExp(`\\b${exp.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        if (regex.test(resumeText)) analysis.workExperience.push(exp);
     });
 
     industryPatterns.forEach(industry => {
-        if (text.includes(industry)) analysis.industries.push(industry);
+        const regex = new RegExp(`\\b${industry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        if (regex.test(resumeText)) analysis.industries.push(industry);
     });
 
     responsibilityPatterns.forEach(resp => {
-        if (text.includes(resp)) analysis.responsibilities.push(resp);
+        const regex = new RegExp(`\\b${resp.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        if (regex.test(resumeText)) analysis.responsibilities.push(resp);
     });
 
     // Determine seniority level
@@ -290,7 +312,8 @@ function extractEnhancedSkillsFromText(resumeText) {
     ];
     
     educationPatterns.forEach(edu => {
-        if (text.includes(edu)) analysis.education.push(edu);
+        const regex = new RegExp(`\\b${edu.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        if (regex.test(resumeText)) analysis.education.push(edu);
     });
 
     // Qualification patterns
@@ -301,8 +324,19 @@ function extractEnhancedSkillsFromText(resumeText) {
     ];
     
     qualificationPatterns.forEach(qual => {
-        if (text.includes(qual)) analysis.qualifications.push(qual);
+        const regex = new RegExp(`\\b${qual.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        if (regex.test(resumeText)) analysis.qualifications.push(qual);
     });
+
+    // Clean and deduplicate all results
+    analysis.technicalSkills = cleanAndDeduplicate(analysis.technicalSkills);
+    analysis.softSkills = cleanAndDeduplicate(analysis.softSkills);
+    analysis.workExperience = cleanAndDeduplicate(analysis.workExperience);
+    analysis.education = cleanAndDeduplicate(analysis.education);
+    analysis.qualifications = cleanAndDeduplicate(analysis.qualifications);
+    analysis.industries = cleanAndDeduplicate(analysis.industries);
+    analysis.responsibilities = cleanAndDeduplicate(analysis.responsibilities);
+    analysis.achievements = cleanAndDeduplicate(analysis.achievements);
 
     console.log('Enhanced skill extraction results:', {
         technical: analysis.technicalSkills.length,
